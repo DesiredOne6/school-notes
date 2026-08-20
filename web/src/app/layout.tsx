@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 import Link from 'next/link';
 import './globals.css';
+import { SignOutButton } from '@/components/SignOutButton';
+import { getCurrentUser } from '@/lib/supabase/server';
 
 export const metadata: Metadata = {
   title: 'School Notes',
@@ -21,7 +23,10 @@ const NAV = [
   { href: '/settings', label: 'Settings' },
 ];
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Drives whether the nav shows sign-out; the login page has no session.
+  const user = await getCurrentUser();
+
   return (
     // suppressHydrationWarning covers attributes injected into <html> by
     // browser extensions (Dark Reader, Grammarly, password managers) before
@@ -34,12 +39,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/" className="text-lg font-semibold tracking-tight">
               School<span className="text-[var(--color-accent)]">Notes</span>
             </Link>
-            <nav className="flex gap-5 text-sm text-[var(--color-muted)]">
-              {NAV.map((item) => (
-                <Link key={item.href} href={item.href} className="hover:text-white">
-                  {item.label}
-                </Link>
-              ))}
+            <nav className="flex items-center gap-5 text-sm text-[var(--color-muted)]">
+              {user &&
+                NAV.map((item) => (
+                  <Link key={item.href} href={item.href} className="hover:text-white">
+                    {item.label}
+                  </Link>
+                ))}
+              {user && <SignOutButton />}
             </nav>
           </header>
           <main className="flex-1">{children}</main>

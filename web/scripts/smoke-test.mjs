@@ -38,6 +38,7 @@ function check(name, condition, detail = '') {
 }
 
 const email = `smoke-${Date.now()}@example.invalid`;
+const password = `Pw-${Math.random().toString(36).slice(2)}-${Date.now()}`;
 let userId = null;
 
 try {
@@ -45,6 +46,7 @@ try {
 
   const { data: created, error: createErr } = await admin.auth.admin.createUser({
     email,
+    password,
     email_confirm: true,
   });
   check('test user created', !createErr && created?.user, createErr?.message);
@@ -138,6 +140,34 @@ try {
     user_id: userId, title: 'Duplicate', canvas_assignment_id: 424242, source: 'canvas',
   });
   check('duplicate Canvas import rejected', dupeErr?.code === '23505', dupeErr?.code);
+
+  console.log('\nPassword authentication');
+
+  const { data: signIn, error: signInErr } = await anon.auth.signInWithPassword({
+    email, password,
+  });
+  check('correct password signs in', !signInErr && signIn?.session, signInErr?.message);
+  check('session carries the right user', signIn?.user?.id === userId);
+
+  const { error: wrongErr } = await anon.auth.signInWithPassword({
+    email, password: 'definitely-not-the-password',
+  });
+  check('wrong password is rejected', Boolean(wrongErr), wrongErr?.message ?? 'no error raised');
+
+  // A signed-in user must see their own rows, where anon saw none.
+  const scoped = createClient(url, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${signIn.session.access_token}` } },
+  });
+  const { data: ownCourses } = await scoped.from('courses').select('id');
+  check('signed-in user sees their own courses via RLS', (ownCourses?.length ?? 0) === 1,
+    `${ownCourses?.length}`);
+
+  // Even signed in, the token table stays unreachable.
+  const { data: ownSecrets } = await scoped.from('integration_secrets').select('integration_id');
+  check('signed-in user still cannot read integration_secrets', (ownSecrets?.length ?? 0) === 0);
+
+  await anon.auth.signOut();
 
   console.log('\nCourse hub');
 
