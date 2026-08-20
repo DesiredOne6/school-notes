@@ -13,7 +13,8 @@
     "db:push": "supabase db push",
     "db:types": "supabase gen types typescript --linked > src/lib/types/db.generated.ts",
     "test:watch": "vitest",
-    "smoke": "node --env-file=.env.local scripts/smoke-test.mjs"
+    "smoke": "node --env-file=.env.local scripts/smoke-test.mjs",
+    "docs:pdf": "node scripts/build-pdf.mjs"
   },
   "dependencies": {
     "@notionhq/client": "^5.25.2",
@@ -38,6 +39,7 @@
     "@types/web-push": "^3.6.4",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
+    "marked": "^18.0.10",
     "supabase": "^2.115.0",
     "tailwindcss": "^4",
     "typescript": "^5",

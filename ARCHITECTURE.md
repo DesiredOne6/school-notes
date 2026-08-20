@@ -5,6 +5,10 @@ already program but hasn't built a web app.
 
 Roughly 14,000 lines, 96 files. Small enough to understand completely.
 
+A printable copy lives at
+[docs/School-Notes-Architecture.pdf](docs/School-Notes-Architecture.pdf),
+regenerated from this file with `cd web && npm run docs:pdf`.
+
 ---
 
 ## The one concept that unlocks everything
