@@ -61,10 +61,15 @@ export default async function NotesPage({
               : `${notes.length} note${notes.length === 1 ? '' : 's'}`}
           </p>
         </div>
-        <NewNoteButton courses={courses ?? []} />
+        <NewNoteButton
+          courses={courses ?? []}
+          lockedCourseId={params.course}
+        />
       </div>
 
       <form className="flex gap-2">
+        {/* Preserved so searching inside a course doesn't drop the filter. */}
+        {params.course && <input type="hidden" name="course" value={params.course} />}
         <input
           name="q"
           defaultValue={query}
@@ -79,13 +84,47 @@ export default async function NotesPage({
         </button>
         {query && (
           <Link
-            href="/notes"
+            href={params.course ? `/notes?course=${params.course}` : '/notes'}
             className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-muted)] hover:text-white"
           >
             Clear
           </Link>
         )}
       </form>
+
+      {(courses ?? []).length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          <Link
+            href={query ? `/notes?q=${encodeURIComponent(query)}` : '/notes'}
+            className={`rounded-full px-2.5 py-1 text-xs ${
+              params.course
+                ? 'border border-[var(--color-border)] text-[var(--color-muted)] hover:text-white'
+                : 'border border-[var(--color-accent)] bg-[var(--color-accent)]/20'
+            }`}
+          >
+            All courses
+          </Link>
+          {(courses ?? []).map((c) => {
+            const href = query
+              ? `/notes?course=${c.id}&q=${encodeURIComponent(query)}`
+              : `/notes?course=${c.id}`;
+            const active = params.course === c.id;
+            return (
+              <Link
+                key={c.id}
+                href={href}
+                className={`rounded-full px-2.5 py-1 text-xs ${
+                  active
+                    ? 'border border-[var(--color-accent)] bg-[var(--color-accent)]/20'
+                    : 'border border-[var(--color-border)] text-[var(--color-muted)] hover:text-white'
+                }`}
+              >
+                {c.code ?? c.title}
+              </Link>
+            );
+          })}
+        </div>
+      )}
 
       {error && (
         <p className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">

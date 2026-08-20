@@ -7,14 +7,19 @@ import { createNote } from '@/app/actions/notes';
 export function NewNoteButton({
   courses,
   defaultTitle = '',
+  /** When set, the note is created for this course and the picker is hidden. */
+  lockedCourseId,
+  label = '+ New note',
 }: {
   courses: Array<{ id: string; code: string | null; title: string }>;
   defaultTitle?: string;
+  lockedCourseId?: string;
+  label?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState(defaultTitle);
-  const [courseId, setCourseId] = useState('');
+  const [courseId, setCourseId] = useState(lockedCourseId ?? '');
   const [kind, setKind] = useState<'page' | 'handwritten'>('page');
   const [error, setError] = useState('');
   const [pending, startTransition] = useTransition();
@@ -28,7 +33,7 @@ export function NewNoteButton({
         onClick={() => setOpen(true)}
         className="rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-white"
       >
-        + New note
+        {label}
       </button>
     );
   }
@@ -89,14 +94,16 @@ export function NewNoteButton({
         </button>
       </div>
 
-      <select value={courseId} onChange={(e) => setCourseId(e.target.value)} className={inputClass}>
-        <option value="">No course</option>
-        {courses.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.code ? `${c.code} — ${c.title}` : c.title}
-          </option>
-        ))}
-      </select>
+      {!lockedCourseId && (
+        <select value={courseId} onChange={(e) => setCourseId(e.target.value)} className={inputClass}>
+          <option value="">No course</option>
+          {courses.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.code ? `${c.code} — ${c.title}` : c.title}
+            </option>
+          ))}
+        </select>
+      )}
 
       {error && <p className="text-xs text-red-400">{error}</p>}
 

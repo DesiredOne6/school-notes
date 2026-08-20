@@ -196,6 +196,27 @@ try {
     .eq('instructor_id', instructor.id);
   check('office hours cascade when the instructor is removed', orphanHours === 0, `${orphanHours}`);
 
+  // The course hub matches calendar events to a course by its code appearing
+  // in the title, so verify that query shape works against real data.
+  const { data: cal } = await admin.from('external_calendars').select('id').limit(1);
+  if (cal?.[0]) {
+    const { error: evErr } = await admin.from('calendar_events').insert({
+      user_id: userId, calendar_id: cal[0].id, external_event_id: `smoke-${Date.now()}`,
+      title: 'CS 3410 review session', starts_at: new Date(Date.now() + 86400000).toISOString(),
+      ends_at: new Date(Date.now() + 90000000).toISOString(),
+    });
+
+    if (!evErr) {
+      const { data: matched } = await admin
+        .from('calendar_events').select('id, title').ilike('title', '%CS 3410%');
+      check('course hub can match events by course code',
+        matched?.some((e) => e.title === 'CS 3410 review session'), `${matched?.length} hits`);
+      await admin.from('calendar_events').delete().eq('title', 'CS 3410 review session');
+    } else {
+      check('course hub can match events by course code', false, evErr.message);
+    }
+  }
+
   console.log('\nNotes');
 
   const { data: noteA, error: noteAErr } = await admin.from('notes').insert({
