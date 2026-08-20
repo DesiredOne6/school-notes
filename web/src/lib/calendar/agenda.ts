@@ -27,7 +27,7 @@ export type MeetingRow = {
   url: string | null;
   starts_on: string | null;
   ends_on: string | null;
-  courses: { code: string | null; title: string; color: string } | null;
+  courses: { code: string | null; title: string; color: string; location?: string | null } | null;
 };
 
 export type AssignmentRow = {
@@ -130,7 +130,10 @@ export function expandMeetings(
         endsAt,
         isAllDay: false,
         color: meeting.courses?.color ?? DEFAULT_COURSE_COLOR,
-        location: meeting.location,
+        // Most courses meet in one room; per-meeting rooms exist for the ones
+        // where lecture and discussion differ. Fall back so the common case
+        // needs the room entered only once.
+        location: meeting.location ?? meeting.courses?.location ?? null,
         url: meeting.url,
       });
     }

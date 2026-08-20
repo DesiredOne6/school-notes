@@ -52,7 +52,10 @@ function ItemRow({ item, timeZone }: { item: AgendaItem; timeZone: string }) {
           {item.subtitle && ` · ${item.subtitle}`}
         </p>
         {item.location && (
-          <p className="truncate text-[10px] text-[var(--color-muted)]">{item.location}</p>
+          <p className="mt-0.5 truncate text-[10px] text-[#b9bdd0]">
+            <span aria-hidden className="mr-0.5">📍</span>
+            {item.location}
+          </p>
         )}
       </div>
     </div>
@@ -94,7 +97,7 @@ export default async function CalendarPage({
   const [meetingsRes, assignmentsRes, eventsRes] = await Promise.all([
     supabase
       .from('course_meetings')
-      .select('id, kind, weekday, starts_at, ends_at, location, url, starts_on, ends_on, courses(code, title, color)'),
+      .select('id, kind, weekday, starts_at, ends_at, location, url, starts_on, ends_on, courses(code, title, color, location)'),
     supabase
       .from('assignments')
       .select('id, title, kind, due_at, due_is_all_day, url, courses(code, title, color)')
@@ -221,7 +224,7 @@ export default async function CalendarPage({
       </div>
 
       <p className="text-xs text-[var(--color-muted)]">
-        📌 = assignment due · coloured bars match your course and calendar colours
+        📌 = assignment due · 📍 = room · coloured bars match your course and calendar colours
         {hiddenCount > 0 && (
           <>
             {' · '}

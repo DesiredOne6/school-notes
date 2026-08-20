@@ -360,3 +360,44 @@ test('a similarly titled event at a different time is kept', () => {
 
   assert.equal(dedupeClassEvents([...assignment, ...studySession]).length, 2);
 });
+
+test('a meeting with its own room keeps it', () => {
+  const items = expandMeetings(
+    [meeting({ location: 'DOW 1013', courses: { ...course, location: 'Default Hall' } })],
+    new Date('2026-03-15T04:00:00Z'),
+    new Date('2026-03-22T03:59:59Z'),
+    TZ,
+  );
+  assert.equal(items[0].location, 'DOW 1013', 'the specific room wins');
+});
+
+test('a meeting with no room falls back to the course default', () => {
+  const items = expandMeetings(
+    [meeting({ location: null, courses: { ...course, location: 'Default Hall' } })],
+    new Date('2026-03-15T04:00:00Z'),
+    new Date('2026-03-22T03:59:59Z'),
+    TZ,
+  );
+  assert.equal(items[0].location, 'Default Hall');
+});
+
+test('lecture and discussion keep separate rooms', () => {
+  // The case that matters: EECS 203 lectures in one hall, discussion in another.
+  const items = expandMeetings(
+    [
+      meeting({ id: 'lec', weekday: 2, location: 'STAMPS' }),
+      meeting({
+        id: 'dis', weekday: 5, kind: 'discussion', location: 'BBB 1670',
+        starts_at: '10:30:00', ends_at: '11:30:00',
+      }),
+    ],
+    new Date('2026-03-15T04:00:00Z'),
+    new Date('2026-03-22T03:59:59Z'),
+    TZ,
+  );
+
+  const byRoom = Object.fromEntries(items.map((i) => [i.location, i.subtitle]));
+  assert.deepEqual(Object.keys(byRoom).sort(), ['BBB 1670', 'STAMPS']);
+  assert.equal(byRoom['BBB 1670'], 'Discussion', 'the discussion is labelled as such');
+  assert.equal(byRoom['STAMPS'], null, 'a lecture needs no label');
+});

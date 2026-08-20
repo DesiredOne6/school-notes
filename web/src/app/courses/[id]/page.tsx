@@ -143,7 +143,12 @@ export default async function CourseHubPage({
     ...expandMeetings(
       meetingsForAgenda.map((m) => ({
         ...m,
-        courses: { code: course.code, title: course.title, color: course.color },
+        courses: {
+          code: course.code,
+          title: course.title,
+          color: course.color,
+          location: course.location,
+        },
       })),
       now,
       rangeEnd,

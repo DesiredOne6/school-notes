@@ -38,7 +38,13 @@ const PALETTE = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#0ea5e9', '#a855f7
 const COURSE_FIELDS: Field[] = [
   { name: 'code', label: 'Code', type: 'text', placeholder: 'EECS 203' },
   { name: 'title', label: 'Title', type: 'text', required: true },
-  { name: 'location', label: 'Room', type: 'text', span: 2 },
+  {
+    name: 'location',
+    label: 'Default room',
+    type: 'text',
+    placeholder: 'Used when a meeting time has no room of its own',
+    span: 2,
+  },
   { name: 'color', label: 'Colour', type: 'color', options: PALETTE, span: 2 },
 ];
 
@@ -66,6 +72,7 @@ export type CourseWithMeetings = {
   code: string | null;
   title: string;
   color: string;
+  location: string | null;
   archived_at: string | null;
   course_meetings: Array<{
     id: string;
@@ -496,7 +503,7 @@ export function CourseManager({ courses }: { courses: CourseWithMeetings[] }) {
                 initial={{
                   code: course.code ?? '',
                   title: course.title,
-                  location: '',
+                  location: course.location ?? '',
                   color: course.color,
                 }}
                 onSave={async (v: Record<string, FieldValue>) => {
