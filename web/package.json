@@ -1,0 +1,44 @@
+{
+  "name": "school-notes-web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:check": "bash ../scripts/db-check.sh",
+    "db:push": "supabase db push",
+    "db:types": "supabase gen types typescript --linked > src/lib/types/db.generated.ts",
+    "test:watch": "vitest",
+    "smoke": "node --env-file=.env.local scripts/smoke-test.mjs"
+  },
+  "dependencies": {
+    "@notionhq/client": "^5.25.2",
+    "@supabase/ssr": "^0.12.4",
+    "@supabase/supabase-js": "^2.112.3",
+    "date-fns": "^4.4.0",
+    "date-fns-tz": "^3.2.0",
+    "googleapis": "^176.0.0",
+    "next": "16.3.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "web-push": "^3.6.7",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/web-push": "^3.6.4",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.1",
+    "supabase": "^2.115.0",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vitest": "^4.1.11"
+  }
+}
