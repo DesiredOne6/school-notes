@@ -85,6 +85,26 @@ export async function addCourseMeetings(input: unknown): Promise<ActionResult> {
   return { ok: true };
 }
 
+/**
+ * Removes every row behind one displayed meeting. A Tue/Thu lecture shows as a
+ * single line but is two rows, and deleting only one would silently leave half
+ * the class on the calendar.
+ */
+export async function deleteCourseMeetings(meetingIds: string[]): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: 'Not signed in' };
+  if (meetingIds.length === 0) return { ok: true };
+
+  const supabase = await createServerSupabase();
+  const { error } = await supabase.from('course_meetings').delete().in('id', meetingIds);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath('/courses');
+  revalidatePath('/calendar');
+  return { ok: true };
+}
+
 export async function deleteCourseMeeting(meetingId: string): Promise<ActionResult> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: 'Not signed in' };

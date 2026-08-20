@@ -4,7 +4,12 @@ import { createServerSupabase } from '@/lib/supabase/server';
 import { Instructors, type InstructorRow } from '@/components/course-hub/Instructors';
 import { Links, type LinkRow } from '@/components/course-hub/Links';
 import { Documents, type DocumentRow } from '@/components/course-hub/Documents';
-import { DAY_LABEL, formatClock } from '@/components/course-hub/shared';
+import {
+  groupMeetings,
+  formatWeekdays,
+  formatTimeRange,
+  meetingKindLabel,
+} from '@/lib/util/meetings';
 import { relativeDue } from '@/lib/util/dates';
 import {
   expandMeetings,
@@ -187,24 +192,29 @@ export default async function CourseHubPage({
           <p className="text-xs text-[var(--color-muted)]">No meeting times set.</p>
         ) : (
           <ul className="space-y-1">
-            {meetings
-              .slice()
-              .sort((a, b) => a.weekday - b.weekday || a.starts_at.localeCompare(b.starts_at))
-              .map((m) => (
-                <li
-                  key={m.id}
-                  className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs"
-                >
-                  <strong>{DAY_LABEL[m.weekday]}</strong> {formatClock(m.starts_at)}–{formatClock(m.ends_at)}
-                  {m.location && ` · ${m.location}`}
-                  {m.kind !== 'lecture' && ` · ${m.kind}`}
-                  {m.url && (
-                    <a href={m.url} target="_blank" rel="noreferrer" className="ml-2 text-[var(--color-accent)] hover:underline">
-                      join
-                    </a>
-                  )}
-                </li>
-              ))}
+            {groupMeetings(meetings).map((group) => (
+              <li
+                key={group.ids.join(',')}
+                className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs"
+              >
+                <span className="mr-2 rounded bg-[var(--color-panel)] px-1.5 py-0.5 text-[10px] uppercase text-[var(--color-muted)]">
+                  {meetingKindLabel(group.kind)}
+                </span>
+                <strong>{formatWeekdays(group.weekdays)}</strong>{' '}
+                {formatTimeRange(group.startsAt, group.endsAt)}
+                {group.location && ` · ${group.location}`}
+                {group.url && (
+                  <a
+                    href={group.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="ml-2 text-[var(--color-accent)] hover:underline"
+                  >
+                    join
+                  </a>
+                )}
+              </li>
+            ))}
           </ul>
         )}
       </Panel>

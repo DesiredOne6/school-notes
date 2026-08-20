@@ -1,4 +1,5 @@
 import { zonedTimeToUtc, zonedDateKey } from '@/lib/util/timezone';
+import { meetingKindLabel } from '@/lib/util/meetings';
 
 export type AgendaKind = 'assignment' | 'class' | 'event';
 
@@ -122,7 +123,9 @@ export function expandMeetings(
         id: `${meeting.id}:${key}`,
         kind: 'class',
         title: meeting.courses?.code ?? meeting.courses?.title ?? 'Class',
-        subtitle: meeting.kind === 'lecture' ? null : meeting.kind,
+        // Lecture is the default and adds nothing; a discussion or lab is
+        // worth distinguishing at a glance on a crowded week.
+        subtitle: meeting.kind === 'lecture' ? null : meetingKindLabel(meeting.kind),
         startsAt,
         endsAt,
         isAllDay: false,

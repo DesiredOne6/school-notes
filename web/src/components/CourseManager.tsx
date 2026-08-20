@@ -4,9 +4,16 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
+  groupMeetings,
+  formatWeekdays,
+  formatTimeRange,
+  meetingKindLabel,
+  MEETING_KINDS,
+} from '@/lib/util/meetings';
+import {
   createCourse,
   addCourseMeetings,
-  deleteCourseMeeting,
+  deleteCourseMeetings,
   getCourseImpact,
   setCourseArchived,
   deleteCourse,
@@ -232,10 +239,9 @@ function MeetingForm({ courseId }: { courseId: string }) {
         <label className="block">
           <span className="mb-1 block text-xs text-[var(--color-muted)]">Type</span>
           <select value={kind} onChange={(e) => setKind(e.target.value)} className={inputClass}>
-            <option value="lecture">Lecture</option>
-            <option value="lab">Lab</option>
-            <option value="discussion">Discussion</option>
-            <option value="review">Review</option>
+            {MEETING_KINDS.map((k) => (
+              <option key={k.value} value={k.value}>{k.label}</option>
+            ))}
           </select>
         </label>
       </div>
@@ -277,8 +283,6 @@ function MeetingForm({ courseId }: { courseId: string }) {
     </form>
   );
 }
-
-const DAY_LABEL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 /**
  * Removal controls. Deleting a course cascades to its assignments and
@@ -449,31 +453,31 @@ export function CourseManager({ courses }: { courses: CourseWithMeetings[] }) {
 
           {course.course_meetings.length > 0 && (
             <ul className="mt-3 space-y-1">
-              {course.course_meetings
-                .slice()
-                .sort((a, b) => a.weekday - b.weekday || a.starts_at.localeCompare(b.starts_at))
-                .map((m) => (
-                  <li
-                    key={m.id}
-                    className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs"
-                  >
-                    <span>
-                      <strong>{DAY_LABEL[m.weekday]}</strong> {m.starts_at.slice(0, 5)}–{m.ends_at.slice(0, 5)}
-                      {m.location && ` · ${m.location}`}
-                      {m.kind !== 'lecture' && ` · ${m.kind}`}
+              {groupMeetings(course.course_meetings).map((group) => (
+                <li
+                  key={group.ids.join(',')}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs"
+                >
+                  <span className="min-w-0">
+                    <span className="mr-2 rounded bg-[var(--color-panel)] px-1.5 py-0.5 text-[10px] uppercase text-[var(--color-muted)]">
+                      {meetingKindLabel(group.kind)}
                     </span>
-                    <button
-                      onClick={async () => {
-                        await deleteCourseMeeting(m.id);
-                        startTransition(() => router.refresh());
-                      }}
-                      className="text-[var(--color-muted)] hover:text-red-400"
-                      aria-label="Remove meeting time"
-                    >
-                      ✕
-                    </button>
-                  </li>
-                ))}
+                    <strong>{formatWeekdays(group.weekdays)}</strong>{' '}
+                    {formatTimeRange(group.startsAt, group.endsAt)}
+                    {group.location && ` · ${group.location}`}
+                  </span>
+                  <button
+                    onClick={async () => {
+                      await deleteCourseMeetings(group.ids);
+                      startTransition(() => router.refresh());
+                    }}
+                    className="shrink-0 text-[var(--color-muted)] hover:text-red-400"
+                    aria-label="Remove meeting time"
+                  >
+                    ✕
+                  </button>
+                </li>
+              ))}
             </ul>
           )}
 
