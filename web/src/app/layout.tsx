@@ -2,18 +2,41 @@ import type { Metadata, Viewport } from 'next';
 import Link from 'next/link';
 import './globals.css';
 import { SignOutButton } from '@/components/SignOutButton';
+import { ServiceWorkerRegistrar } from '@/components/ServiceWorkerRegistrar';
 import { getCurrentUser } from '@/lib/supabase/server';
 
 export const metadata: Metadata = {
   title: 'School Notes',
   description: 'Notes, assignments, and course info in one place.',
   manifest: '/manifest.webmanifest',
+  // Needed for a proper installed experience on iOS: without appleWebApp the
+  // app opens in a Safari chrome instead of standalone, and web push - which
+  // iOS only allows for home-screen installs - never becomes available.
+  appleWebApp: {
+    capable: true,
+    title: 'School',
+    statusBarStyle: 'black-translucent',
+  },
+  applicationName: 'School Notes',
+  icons: {
+    icon: [
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
+  formatDetection: {
+    // Stops iOS turning room numbers and course codes into phone links.
+    telephone: false,
+  },
 };
 
 export const viewport: Viewport = {
   themeColor: '#0d0d12',
   width: 'device-width',
   initialScale: 1,
+  // Keeps the layout clear of the notch and home indicator when installed.
+  viewportFit: 'cover',
 };
 
 const NAV = [
@@ -35,6 +58,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     // the tree beneath it, so real hydration bugs in the app still surface.
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen antialiased">
+        <ServiceWorkerRegistrar />
         <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-5 py-6">
           <header className="mb-8 flex items-center justify-between border-b border-[var(--color-border)] pb-4">
             <Link href="/" className="text-lg font-semibold tracking-tight">

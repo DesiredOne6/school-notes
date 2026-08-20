@@ -37,7 +37,10 @@ export default async function proxy(request: NextRequest) {
   const isPublic =
     pathname.startsWith('/login') ||
     pathname.startsWith('/auth') ||
-    pathname.startsWith('/api/cron');
+    pathname.startsWith('/api/cron') ||
+    // The service worker serves this when the network is gone; gating it
+    // behind auth would redirect to a login page that also cannot load.
+    pathname === '/offline';
 
   if (!data.user && !isPublic) {
     const url = request.nextUrl.clone();

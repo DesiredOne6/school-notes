@@ -6,6 +6,7 @@ import { GoogleAccounts, type AccountRow } from '@/components/GoogleAccounts';
 import { ChangePassword } from '@/components/ChangePassword';
 import { NotionConnect } from '@/components/NotionConnect';
 import { CalendarPrefs } from '@/components/CalendarPrefs';
+import { InstallPrompt } from '@/components/InstallPrompt';
 
 const GOOGLE_MESSAGES: Record<string, string> = {
   connected: 'Google Calendar connected.',
@@ -111,6 +112,13 @@ export default async function SettingsPage({
             Last synced {new Date(canvas.last_synced_at).toLocaleString()}
           </p>
         )}
+      </Panel>
+
+      <Panel
+        title="Install as an app"
+        description="Runs in its own window with an icon, on iPhone, Mac, and Windows alike."
+      >
+        <InstallPrompt />
       </Panel>
 
       <Panel
