@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { createCourse, addCourseMeetings, deleteCourseMeeting } from '@/app/actions/courses';
 
 const DAYS = [
@@ -291,9 +292,11 @@ export function CourseManager({ courses }: { courses: CourseWithMeetings[] }) {
         >
           <div className="flex items-center gap-3">
             <span aria-hidden className="h-8 w-1 rounded-full" style={{ background: course.color }} />
-            <div>
+            <div className="min-w-0 flex-1">
               <h2 className="text-sm font-semibold">
-                {course.code ? `${course.code} — ${course.title}` : course.title}
+                <Link href={`/courses/${course.id}`} className="hover:text-[var(--color-accent)]">
+                  {course.code ? `${course.code} — ${course.title}` : course.title}
+                </Link>
               </h2>
               <p className="text-xs text-[var(--color-muted)]">
                 {course.course_meetings.length === 0
@@ -301,6 +304,13 @@ export function CourseManager({ courses }: { courses: CourseWithMeetings[] }) {
                   : `${course.course_meetings.length} meeting time${course.course_meetings.length === 1 ? '' : 's'}`}
               </p>
             </div>
+
+            <Link
+              href={`/courses/${course.id}`}
+              className="shrink-0 rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs hover:border-[var(--color-accent)]"
+            >
+              Open hub →
+            </Link>
           </div>
 
           {course.course_meetings.length > 0 && (

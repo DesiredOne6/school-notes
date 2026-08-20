@@ -139,11 +139,60 @@ try {
   });
   check('duplicate Canvas import rejected', dupeErr?.code === '23505', dupeErr?.code);
 
+  console.log('\nCourse hub');
+
+  const { data: instructor, error: instErr } = await admin
+    .from('instructors')
+    .insert({ user_id: userId, course_id: course.id, name: 'Dr. Example', role: 'professor', email: 'prof@example.edu' })
+    .select('id').single();
+  check('instructor inserted', !instErr && instructor, instErr?.message);
+
+  const { error: ohErr } = await admin.from('office_hours').insert({
+    user_id: userId, instructor_id: instructor.id,
+    weekday: 3, starts_at: '14:00', ends_at: '16:00', location: 'BBB 2717',
+  });
+  check('office hours inserted', !ohErr, ohErr?.message);
+
+  const { error: linkErr } = await admin.from('course_links').insert({
+    user_id: userId, course_id: course.id, kind: 'zoom',
+    label: 'Lecture Zoom', url: 'https://umich.zoom.us/j/123',
+  });
+  check('course link inserted', !linkErr, linkErr?.message);
+
+  // Deleting an instructor must take their office hours with them.
+  await admin.from('instructors').delete().eq('id', instructor.id);
+  const { count: orphanHours } = await admin
+    .from('office_hours').select('*', { count: 'exact', head: true })
+    .eq('instructor_id', instructor.id);
+  check('office hours cascade when the instructor is removed', orphanHours === 0, `${orphanHours}`);
+
   console.log('\nStorage');
   const { data: buckets } = await admin.storage.listBuckets();
   const names = (buckets ?? []).map((b) => b.name).sort();
   check('notes + documents buckets exist', names.includes('notes') && names.includes('documents'));
   check('buckets are private', (buckets ?? []).every((b) => !b.public));
+
+  // Documents upload to `{uid}/...`, which is what the storage policy requires.
+  const docPath = `${userId}/${course.id}/smoke-test.txt`;
+  const { error: uploadErr } = await admin.storage
+    .from('documents')
+    .upload(docPath, new Blob(['syllabus placeholder'], { type: 'text/plain' }), { upsert: true });
+  check('document uploads to the user-scoped path', !uploadErr, uploadErr?.message);
+
+  const { data: signed } = await admin.storage.from('documents').createSignedUrl(docPath, 60);
+  check('signed download URL is issued', Boolean(signed?.signedUrl));
+
+  if (signed?.signedUrl) {
+    const res = await fetch(signed.signedUrl);
+    check('signed URL actually serves the file', res.ok && (await res.text()) === 'syllabus placeholder');
+  }
+
+  // A private bucket must refuse anonymous reads.
+  const { data: pub } = anon.storage.from('documents').getPublicUrl(docPath);
+  const anonRes = await fetch(pub.publicUrl);
+  check('anon cannot read a private document', !anonRes.ok, `http ${anonRes.status}`);
+
+  await admin.storage.from('documents').remove([docPath]);
 } catch (err) {
   console.error('\nFATAL:', err.message);
   failed += 1;
