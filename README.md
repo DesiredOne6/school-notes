@@ -35,6 +35,10 @@ covers every device instead of an Apple-only one.
 
 ---
 
+> **Working on this yourself?** [ARCHITECTURE.md](ARCHITECTURE.md) maps the
+> codebase, lists the skills in the order they pay off, and has graded exercises
+> to start with.
+
 ## Setup
 
 ### 1. Create a Supabase project
