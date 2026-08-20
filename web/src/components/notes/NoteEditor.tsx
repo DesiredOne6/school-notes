@@ -109,7 +109,7 @@ export function NoteEditor({
 
         if (uploadError) throw new Error(uploadError.message);
 
-        await recordAttachment({
+        const recorded = await recordAttachment({
           noteId: note.id,
           storagePath: path,
           filename: file.name || 'image.png',
@@ -117,9 +117,12 @@ export function NoteEditor({
           byteSize: file.size,
         });
 
-        // A stable app path, not a signed URL — signed URLs expire and would
-        // leave dead images inside saved markdown.
-        const markdown = `\n![${file.name || 'image'}](/api/notes/image?path=${encodeURIComponent(path)})\n`;
+        if (!recorded.ok) throw new Error(recorded.error);
+
+        // A stable app URL, not a signed one — signed URLs expire and would
+        // leave dead images inside saved markdown. The attachment id keeps it
+        // short enough to read while editing.
+        const markdown = `\n![${file.name || 'image'}](/api/notes/image?id=${recorded.id})\n`;
 
         const el = textareaRef.current;
         const at = el?.selectionStart ?? body.length;
@@ -156,7 +159,7 @@ export function NoteEditor({
         .upload(`${base}.json`, vector, { contentType: 'application/json', upsert: false });
       if (jsonError) throw new Error(jsonError.message);
 
-      await recordAttachment({
+      const recorded = await recordAttachment({
         noteId: note.id,
         storagePath: `${base}.png`,
         filename: `handwriting-${stamp}.png`,
@@ -172,13 +175,19 @@ export function NoteEditor({
         },
       });
 
-      const markdown = `\n![handwriting](/api/notes/image?path=${encodeURIComponent(`${base}.png`)})\n`;
+      if (!recorded.ok) throw new Error(recorded.error);
+
+      const markdown = `\n![handwriting](/api/notes/image?id=${recorded.id})\n`;
 
       const el = textareaRef.current;
       const at = el?.selectionStart ?? body.length;
       setBody((prev) => prev.slice(0, at) + markdown + prev.slice(at));
       markDirty();
       setInkOpen(false);
+
+      // Drop into preview so the drawing is visible immediately. Landing back
+      // on a line of raw markdown after handwriting reads as if it failed.
+      setPreview(true);
     },
     [note.id, userId, body.length],
   );
@@ -205,6 +214,7 @@ export function NoteEditor({
             {status === 'error' && <span className="text-red-400">Not saved</span>}
           </span>
           <button
+            title={preview ? 'Switch to the markdown source' : 'Render images, drawings, and links'}
             onClick={() => setPreview((p) => !p)}
             className="rounded-lg border border-[var(--color-border)] px-2.5 py-1 hover:border-[var(--color-accent)]"
           >

@@ -171,25 +171,29 @@ export async function recordAttachment(input: {
   byteSize: number;
   kind?: 'image' | 'ink';
   inkMetadata?: Record<string, unknown>;
-}): Promise<ActionResult> {
+}): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: 'Not signed in' };
 
   const supabase = await createServerSupabase();
 
-  const { error } = await supabase.from('attachments').insert({
-    user_id: user.id,
-    note_id: input.noteId,
-    kind: input.kind ?? 'image',
-    storage_path: input.storagePath,
-    filename: input.filename,
-    mime_type: input.mimeType,
-    byte_size: input.byteSize,
-    ink_metadata: input.inkMetadata ?? null,
-  });
+  const { data, error } = await supabase
+    .from('attachments')
+    .insert({
+      user_id: user.id,
+      note_id: input.noteId,
+      kind: input.kind ?? 'image',
+      storage_path: input.storagePath,
+      filename: input.filename,
+      mime_type: input.mimeType,
+      byte_size: input.byteSize,
+      ink_metadata: input.inkMetadata ?? null,
+    })
+    .select('id')
+    .single();
 
-  if (error) return { ok: false, error: error.message };
-  return { ok: true };
+  if (error || !data) return { ok: false, error: error?.message ?? 'Could not save attachment' };
+  return { ok: true, id: data.id };
 }
 
 /** Signed URL for an image in the private notes bucket. */
