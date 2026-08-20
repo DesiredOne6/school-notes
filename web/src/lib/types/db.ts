@@ -308,6 +308,19 @@ export type CalendarEvent = {
   updated_at: string;
 };
 
+export type NotionPageLink = {
+  id: string;
+  user_id: string;
+  assignment_id: string;
+  integration_id: string;
+  database_id: string;
+  page_id: string;
+  content_hash: string | null;
+  synced_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type SyncRun = {
   id: string;
   user_id: string;
@@ -345,6 +358,7 @@ export type Database = {
       sync_runs: Table<SyncRun, 'user_id' | 'provider'>;
       external_calendars: Table<ExternalCalendar, 'user_id' | 'integration_id' | 'external_id' | 'name'>;
       calendar_events: Table<CalendarEvent, 'user_id' | 'calendar_id' | 'external_event_id' | 'starts_at' | 'ends_at'>;
+      notion_page_links: Table<NotionPageLink, 'user_id' | 'assignment_id' | 'integration_id' | 'database_id' | 'page_id'>;
     };
     Views: Record<never, never>;
     Functions: {

@@ -4,6 +4,7 @@ import { CanvasFeedForm } from '@/components/CanvasFeedForm';
 import { NotificationToggle } from '@/components/NotificationToggle';
 import { GoogleAccounts, type AccountRow } from '@/components/GoogleAccounts';
 import { ChangePassword } from '@/components/ChangePassword';
+import { NotionConnect } from '@/components/NotionConnect';
 
 const GOOGLE_MESSAGES: Record<string, string> = {
   connected: 'Google Calendar connected.',
@@ -50,6 +51,7 @@ export default async function SettingsPage({
   const byProvider = new Map(all.map((i) => [i.provider, i]));
   const canvas = byProvider.get('canvas');
   const ics = byProvider.get('ics');
+  const notion = byProvider.get('notion');
 
   const googleAccounts: AccountRow[] = all
     .filter((i) => i.provider === 'google')
@@ -125,6 +127,19 @@ export default async function SettingsPage({
         description="Due dates are written to a dedicated 'School' calendar, so your own calendars are never edited. Your other calendars are read so class, club, and personal events appear in the calendar view."
       >
         <GoogleAccounts accounts={googleAccounts} />
+      </Panel>
+
+      <Panel
+        title="Notion"
+        description="Mirrors your assignments into a Notion database, with due dates, course, type, status, and points."
+      >
+        <NotionConnect
+          connected={notion?.account_label ?? null}
+          hasDatabase={Boolean((notion?.config as { database_id?: string })?.database_id)}
+        />
+        {notion?.last_error && (
+          <p className="mt-3 text-xs text-red-400">Last sync error: {notion.last_error}</p>
+        )}
       </Panel>
 
       <Panel

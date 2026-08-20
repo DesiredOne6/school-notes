@@ -3,6 +3,7 @@ import { syncCanvasForUser } from '@/lib/canvas/sync';
 import { syncIcsForUser } from '@/lib/canvas/ics-sync';
 import { syncAssignmentsToGoogle } from '@/lib/google/calendar';
 import { syncExternalCalendars } from '@/lib/google/external';
+import { syncAssignmentsToNotion } from '@/lib/notion/sync';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireUser, errorResponse } from '@/lib/api/guards';
 
@@ -60,6 +61,14 @@ export async function POST() {
         report.calendars = await syncExternalCalendars(user.id);
       } catch (err) {
         report.calendars = { error: (err as Error).message };
+      }
+    }
+
+    if (connected.has('notion')) {
+      try {
+        report.notion = await syncAssignmentsToNotion(user.id);
+      } catch (err) {
+        report.notion = { error: (err as Error).message };
       }
     }
 
