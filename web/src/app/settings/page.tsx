@@ -3,6 +3,7 @@ import { CanvasConnectForm } from '@/components/CanvasConnectForm';
 import { CanvasFeedForm } from '@/components/CanvasFeedForm';
 import { NotificationToggle } from '@/components/NotificationToggle';
 import { GoogleAccounts, type AccountRow } from '@/components/GoogleAccounts';
+import { ChangePassword } from '@/components/ChangePassword';
 
 const GOOGLE_MESSAGES: Record<string, string> = {
   connected: 'Google Calendar connected.',
@@ -33,6 +34,7 @@ export default async function SettingsPage({
 }) {
   const params = await searchParams;
   const supabase = await createServerSupabase();
+  const { data: auth } = await supabase.auth.getUser();
 
   const [{ data: integrations }, { data: calendars }] = await Promise.all([
     supabase
@@ -123,6 +125,13 @@ export default async function SettingsPage({
         description="Due dates are written to a dedicated 'School' calendar, so your own calendars are never edited. Your other calendars are read so class, club, and personal events appear in the calendar view."
       >
         <GoogleAccounts accounts={googleAccounts} />
+      </Panel>
+
+      <Panel
+        title="Password"
+        description="Change it here — this needs no email, so it works even when Supabase's email quota is spent."
+      >
+        <ChangePassword email={auth.user?.email ?? ''} />
       </Panel>
 
       <Panel
