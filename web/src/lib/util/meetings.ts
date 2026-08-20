@@ -16,6 +16,8 @@ export type MeetingLike = {
   ends_at: string;
   location: string | null;
   url?: string | null;
+  starts_on?: string | null;
+  ends_on?: string | null;
 };
 
 export type MeetingGroup = {
@@ -24,6 +26,8 @@ export type MeetingGroup = {
   endsAt: string;
   location: string | null;
   url: string | null;
+  startsOn: string | null;
+  endsOn: string | null;
   /** Sorted with the week starting on Monday, as a timetable reads. */
   weekdays: number[];
   /** Every underlying row, so deleting the group removes all of them. */
@@ -42,12 +46,16 @@ export function groupMeetings(meetings: MeetingLike[]): MeetingGroup[] {
 
   for (const meeting of meetings) {
     // Everything except the weekday forms the identity of a group.
+    // Term bounds are part of a group's identity too: a lecture that runs all
+    // semester is not the same meeting as one limited to a few weeks.
     const key = [
       meeting.kind,
       meeting.starts_at,
       meeting.ends_at,
       meeting.location ?? '',
       meeting.url ?? '',
+      meeting.starts_on ?? '',
+      meeting.ends_on ?? '',
     ].join('|');
 
     const existing = groups.get(key);
@@ -62,6 +70,8 @@ export function groupMeetings(meetings: MeetingLike[]): MeetingGroup[] {
         endsAt: meeting.ends_at,
         location: meeting.location,
         url: meeting.url ?? null,
+        startsOn: meeting.starts_on ?? null,
+        endsOn: meeting.ends_on ?? null,
         weekdays: [meeting.weekday],
         ids: [meeting.id],
       });

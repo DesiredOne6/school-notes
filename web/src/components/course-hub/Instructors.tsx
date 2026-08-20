@@ -5,10 +5,43 @@ import { useRouter } from 'next/navigation';
 import {
   addInstructor,
   deleteInstructor,
+  updateInstructor,
   addOfficeHours,
   deleteOfficeHours,
+  updateOfficeHours,
 } from '@/app/actions/course-hub';
-import { inputClass, DAYS, DAY_LABEL, formatClock } from './shared';
+import { inputClass, DAYS } from './shared';
+import { EditForm, type Field, type FieldValue } from '@/components/ui/EditForm';
+import { groupMeetings, formatWeekdays, formatTimeRange } from '@/lib/util/meetings';
+
+const INSTRUCTOR_FIELDS: Field[] = [
+  { name: 'name', label: 'Name', type: 'text', required: true },
+  {
+    name: 'role',
+    label: 'Role',
+    type: 'select',
+    options: [
+      { value: 'professor', label: 'Professor' },
+      { value: 'ta', label: 'TA' },
+      { value: 'grader', label: 'Grader' },
+      { value: 'advisor', label: 'Advisor' },
+    ],
+  },
+  { name: 'email', label: 'Email', type: 'email' },
+  { name: 'phone', label: 'Phone', type: 'text' },
+  { name: 'office', label: 'Office', type: 'text' },
+  { name: 'pronouns', label: 'Pronouns', type: 'text' },
+  { name: 'notes', label: 'Notes', type: 'textarea', span: 2 },
+];
+
+const OFFICE_HOURS_FIELDS: Field[] = [
+  { name: 'weekdays', label: 'Days', type: 'weekdays', span: 2 },
+  { name: 'startsAt', label: 'Starts', type: 'time', required: true },
+  { name: 'endsAt', label: 'Ends', type: 'time', required: true },
+  { name: 'location', label: 'Location', type: 'text' },
+  { name: 'url', label: 'Zoom link', type: 'text' },
+  { name: 'byAppointment', label: 'By appointment only', type: 'checkbox', span: 2 },
+];
 
 export type OfficeHourRow = {
   id: string;
@@ -206,6 +239,8 @@ export function Instructors({
   const router = useRouter();
   const [adding, setAdding] = useState(false);
   const [hoursFor, setHoursFor] = useState<string | null>(null);
+  const [editingPerson, setEditingPerson] = useState<string | null>(null);
+  const [editingHours, setEditingHours] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   const refresh = () => startTransition(() => router.refresh());
@@ -248,50 +283,155 @@ export function Instructors({
               </div>
             </div>
 
-            <button
-              onClick={async () => {
-                await deleteInstructor(person.id, courseId);
-                refresh();
-              }}
-              className="shrink-0 text-xs text-[var(--color-muted)] hover:text-red-400"
-              aria-label={`Remove ${person.name}`}
-            >
-              ✕
-            </button>
+            <span className="flex shrink-0 gap-2 text-xs">
+              <button
+                onClick={() => setEditingPerson(person.id)}
+                className="text-[var(--color-accent)] hover:underline"
+              >
+                Edit
+              </button>
+              <button
+                onClick={async () => {
+                  await deleteInstructor(person.id, courseId);
+                  refresh();
+                }}
+                className="text-[var(--color-muted)] hover:text-red-400"
+                aria-label={`Remove ${person.name}`}
+              >
+                ✕
+              </button>
+            </span>
           </div>
+
+          {editingPerson === person.id && (
+            <div className="mt-2">
+              <EditForm
+                fields={INSTRUCTOR_FIELDS}
+                initial={{
+                  name: person.name,
+                  role: person.role,
+                  email: person.email ?? '',
+                  phone: person.phone ?? '',
+                  office: person.office ?? '',
+                  pronouns: person.pronouns ?? '',
+                  notes: person.notes ?? '',
+                }}
+                onSave={async (v: Record<string, FieldValue>) => {
+                  const result = await updateInstructor(person.id, {
+                    courseId,
+                    name: String(v.name ?? ''),
+                    role: String(v.role),
+                    email: String(v.email ?? ''),
+                    phone: String(v.phone ?? ''),
+                    office: String(v.office ?? ''),
+                    pronouns: String(v.pronouns ?? ''),
+                    notes: String(v.notes ?? ''),
+                  });
+
+                  if (result.ok) {
+                    setEditingPerson(null);
+                    refresh();
+                  }
+                  return result;
+                }}
+                onCancel={() => setEditingPerson(null)}
+              />
+            </div>
+          )}
 
           {person.office_hours.length > 0 && (
             <ul className="mt-2 space-y-1">
-              {person.office_hours
-                .slice()
-                .sort((a, b) => a.weekday - b.weekday || a.starts_at.localeCompare(b.starts_at))
-                .map((h) => (
+              {groupMeetings(
+                // by_appointment folds into the group key so an appointment-only
+                // slot never merges with a drop-in one at the same time.
+                person.office_hours.map((h) => ({
+                  id: h.id,
+                  kind: h.by_appointment ? 'appointment' : 'dropin',
+                  weekday: h.weekday,
+                  starts_at: h.starts_at,
+                  ends_at: h.ends_at,
+                  location: h.location,
+                  url: h.url,
+                })),
+              ).map((group) => {
+                const key = group.ids.join(',');
+
+                if (editingHours === key) {
+                  return (
+                    <li key={key}>
+                      <EditForm
+                        fields={OFFICE_HOURS_FIELDS}
+                        initial={{
+                          weekdays: group.weekdays,
+                          startsAt: group.startsAt.slice(0, 5),
+                          endsAt: group.endsAt.slice(0, 5),
+                          location: group.location ?? '',
+                          url: group.url ?? '',
+                          byAppointment: group.kind === 'appointment',
+                        }}
+                        onSave={async (v: Record<string, FieldValue>) => {
+                          const result = await updateOfficeHours(group.ids, {
+                            instructorId: person.id,
+                            courseId,
+                            weekdays: (v.weekdays as number[]) ?? [],
+                            startsAt: String(v.startsAt),
+                            endsAt: String(v.endsAt),
+                            location: String(v.location ?? ''),
+                            url: String(v.url ?? ''),
+                            byAppointment: Boolean(v.byAppointment),
+                            notes: '',
+                          });
+
+                          if (result.ok) {
+                            setEditingHours(null);
+                            refresh();
+                          }
+                          return result;
+                        }}
+                        onCancel={() => setEditingHours(null)}
+                      />
+                    </li>
+                  );
+                }
+
+                return (
                   <li
-                    key={h.id}
-                    className="flex items-center justify-between rounded border border-[var(--color-border)] px-2 py-1 text-xs"
+                    key={key}
+                    className="flex items-center justify-between gap-2 rounded border border-[var(--color-border)] px-2 py-1 text-xs"
                   >
-                    <span>
-                      <strong>{DAY_LABEL[h.weekday]}</strong> {formatClock(h.starts_at)}–{formatClock(h.ends_at)}
-                      {h.location && ` · ${h.location}`}
-                      {h.by_appointment && ' · by appointment'}
-                      {h.url && (
-                        <a href={h.url} target="_blank" rel="noreferrer" className="ml-2 text-[var(--color-accent)] hover:underline">
+                    <span className="min-w-0">
+                      <strong>{formatWeekdays(group.weekdays)}</strong>{' '}
+                      {formatTimeRange(group.startsAt, group.endsAt)}
+                      {group.location && ` · ${group.location}`}
+                      {group.kind === 'appointment' && ' · by appointment'}
+                      {group.url && (
+                        <a href={group.url} target="_blank" rel="noreferrer" className="ml-2 text-[var(--color-accent)] hover:underline">
                           join
                         </a>
                       )}
                     </span>
-                    <button
-                      onClick={async () => {
-                        await deleteOfficeHours(h.id, courseId);
-                        refresh();
-                      }}
-                      className="text-[var(--color-muted)] hover:text-red-400"
-                      aria-label="Remove office hours"
-                    >
-                      ✕
-                    </button>
+
+                    <span className="flex shrink-0 gap-2">
+                      <button
+                        onClick={() => setEditingHours(key)}
+                        className="text-[var(--color-accent)] hover:underline"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={async () => {
+                          for (const id of group.ids) await deleteOfficeHours(id, courseId);
+                          refresh();
+                        }}
+                        className="text-[var(--color-muted)] hover:text-red-400"
+                        aria-label="Remove office hours"
+                      >
+                        ✕
+                      </button>
+                    </span>
                   </li>
-                ))}
+                );
+              })}
             </ul>
           )}
 

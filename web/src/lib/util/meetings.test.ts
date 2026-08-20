@@ -122,3 +122,25 @@ test('meeting kinds have readable labels', () => {
 test('an empty list groups to nothing', () => {
   assert.deepEqual(groupMeetings([]), []);
 });
+
+test('meetings with different term bounds are not merged', () => {
+  // A lecture running all semester is not the same meeting as one limited to
+  // a few weeks, even at the same time and place.
+  const groups = groupMeetings([
+    meeting({ id: 'a', weekday: 2, starts_on: '2026-01-05', ends_on: '2026-04-30' }),
+    meeting({ id: 'b', weekday: 4, starts_on: '2026-03-01', ends_on: '2026-03-15' }),
+  ]);
+
+  assert.equal(groups.length, 2);
+});
+
+test('term bounds survive grouping so the editor can show them', () => {
+  const groups = groupMeetings([
+    meeting({ id: 'a', weekday: 2, starts_on: '2026-01-05', ends_on: '2026-04-30' }),
+    meeting({ id: 'b', weekday: 4, starts_on: '2026-01-05', ends_on: '2026-04-30' }),
+  ]);
+
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].startsOn, '2026-01-05');
+  assert.equal(groups[0].endsOn, '2026-04-30');
+});

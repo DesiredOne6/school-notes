@@ -3,7 +3,8 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { addDocument, deleteDocument, getDocumentUrl } from '@/app/actions/course-hub';
+import { addDocument, deleteDocument, updateDocument, getDocumentUrl } from '@/app/actions/course-hub';
+import { EditForm, type Field, type FieldValue } from '@/components/ui/EditForm';
 import { inputClass, DOC_ICON, formatBytes } from './shared';
 
 export type DocumentRow = {
@@ -16,6 +17,18 @@ export type DocumentRow = {
 };
 
 const KINDS = ['syllabus', 'slides', 'reading', 'rubric', 'other'] as const;
+
+// The stored file itself is not editable — replacing it means uploading a new
+// document — so only the label and classification are offered.
+const DOCUMENT_FIELDS: Field[] = [
+  { name: 'title', label: 'Title', type: 'text', required: true },
+  {
+    name: 'kind',
+    label: 'Type',
+    type: 'select',
+    options: KINDS.map((k) => ({ value: k, label: k[0].toUpperCase() + k.slice(1) })),
+  },
+];
 
 /** Supabase Storage rejects keys with spaces or non-ASCII characters. */
 function safeFilename(name: string): string {
@@ -33,6 +46,7 @@ export function Documents({
 }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [kind, setKind] = useState<(typeof KINDS)[number]>('syllabus');
   const [file, setFile] = useState<File | null>(null);
@@ -114,7 +128,27 @@ export function Documents({
         </p>
       )}
 
-      {documents.map((doc) => (
+      {documents.map((doc) =>
+        editing === doc.id ? (
+          <EditForm
+            key={doc.id}
+            fields={DOCUMENT_FIELDS}
+            initial={{ title: doc.title, kind: doc.kind }}
+            onSave={async (v: Record<string, FieldValue>) => {
+              const result = await updateDocument(doc.id, courseId, {
+                title: String(v.title ?? ''),
+                kind: String(v.kind),
+              });
+
+              if (result.ok) {
+                setEditing(null);
+                refresh();
+              }
+              return result;
+            }}
+            onCancel={() => setEditing(null)}
+          />
+        ) : (
         <div
           key={doc.id}
           className="flex items-center justify-between gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2"
@@ -126,18 +160,27 @@ export function Documents({
               {doc.url ? 'link' : formatBytes(doc.byte_size)}
             </span>
           </button>
-          <button
-            onClick={async () => {
-              await deleteDocument(doc.id, courseId, doc.storage_path);
-              refresh();
-            }}
-            className="shrink-0 text-xs text-[var(--color-muted)] hover:text-red-400"
-            aria-label={`Remove ${doc.title}`}
-          >
-            ✕
-          </button>
+          <span className="flex shrink-0 gap-2 text-xs">
+            <button
+              onClick={() => setEditing(doc.id)}
+              className="text-[var(--color-accent)] hover:underline"
+            >
+              Edit
+            </button>
+            <button
+              onClick={async () => {
+                await deleteDocument(doc.id, courseId, doc.storage_path);
+                refresh();
+              }}
+              className="text-[var(--color-muted)] hover:text-red-400"
+              aria-label={`Remove ${doc.title}`}
+            >
+              ✕
+            </button>
+          </span>
         </div>
-      ))}
+        ),
+      )}
 
       {adding ? (
         <form onSubmit={submit} className="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">

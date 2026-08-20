@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { addCourseLink, deleteCourseLink } from '@/app/actions/course-hub';
+import { addCourseLink, deleteCourseLink, updateCourseLink } from '@/app/actions/course-hub';
+import { EditForm, type Field, type FieldValue } from '@/components/ui/EditForm';
 import { inputClass, LINK_ICON } from './shared';
 
 export type LinkRow = {
@@ -15,9 +16,22 @@ export type LinkRow = {
 
 const KINDS = ['zoom', 'meet', 'lms', 'syllabus', 'textbook', 'drive', 'other'] as const;
 
+const LINK_FIELDS: Field[] = [
+  {
+    name: 'kind',
+    label: 'Type',
+    type: 'select',
+    options: KINDS.map((k) => ({ value: k, label: k[0].toUpperCase() + k.slice(1) })),
+  },
+  { name: 'label', label: 'Label', type: 'text', required: true },
+  { name: 'url', label: 'URL', type: 'url', required: true, span: 2 },
+  { name: 'passcode', label: 'Passcode', type: 'text', span: 2 },
+];
+
 export function Links({ courseId, links }: { courseId: string; links: LinkRow[] }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
   const [kind, setKind] = useState<(typeof KINDS)[number]>('zoom');
   const [label, setLabel] = useState('');
   const [url, setUrl] = useState('');
@@ -35,7 +49,35 @@ export function Links({ courseId, links }: { courseId: string; links: LinkRow[] 
         </p>
       )}
 
-      {links.map((link) => (
+      {links.map((link) =>
+        editing === link.id ? (
+          <EditForm
+            key={link.id}
+            fields={LINK_FIELDS}
+            initial={{
+              kind: link.kind,
+              label: link.label,
+              url: link.url,
+              passcode: link.passcode ?? '',
+            }}
+            onSave={async (v: Record<string, FieldValue>) => {
+              const result = await updateCourseLink(link.id, {
+                courseId,
+                kind: String(v.kind),
+                label: String(v.label ?? ''),
+                url: String(v.url ?? ''),
+                passcode: String(v.passcode ?? ''),
+              });
+
+              if (result.ok) {
+                setEditing(null);
+                refresh();
+              }
+              return result;
+            }}
+            onCancel={() => setEditing(null)}
+          />
+        ) : (
         <div
           key={link.id}
           className="flex items-center justify-between gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2"
@@ -54,18 +96,27 @@ export function Links({ courseId, links }: { courseId: string; links: LinkRow[] 
               </span>
             )}
           </a>
-          <button
-            onClick={async () => {
-              await deleteCourseLink(link.id, courseId);
-              refresh();
-            }}
-            className="shrink-0 text-xs text-[var(--color-muted)] hover:text-red-400"
-            aria-label={`Remove ${link.label}`}
-          >
-            ✕
-          </button>
+          <span className="flex shrink-0 gap-2 text-xs">
+            <button
+              onClick={() => setEditing(link.id)}
+              className="text-[var(--color-accent)] hover:underline"
+            >
+              Edit
+            </button>
+            <button
+              onClick={async () => {
+                await deleteCourseLink(link.id, courseId);
+                refresh();
+              }}
+              className="text-[var(--color-muted)] hover:text-red-400"
+              aria-label={`Remove ${link.label}`}
+            >
+              ✕
+            </button>
+          </span>
         </div>
-      ))}
+        ),
+      )}
 
       {adding ? (
         <form

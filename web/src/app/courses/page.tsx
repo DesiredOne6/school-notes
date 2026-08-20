@@ -9,7 +9,7 @@ export default async function CoursesPage() {
   const { data, error } = await supabase
     .from('courses')
     // Archived courses are listed too, greyed out, so they can be restored.
-    .select('id, code, title, color, archived_at, course_meetings(id, kind, weekday, starts_at, ends_at, location)')
+    .select('id, code, title, color, archived_at, course_meetings(id, kind, weekday, starts_at, ends_at, location, url, starts_on, ends_on)')
     .order('archived_at', { ascending: true, nullsFirst: true })
     .order('code', { ascending: true, nullsFirst: false });
 

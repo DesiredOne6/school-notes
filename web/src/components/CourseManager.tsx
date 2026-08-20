@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { EditForm, type Field, type FieldValue } from '@/components/ui/EditForm';
 import {
   groupMeetings,
   formatWeekdays,
@@ -14,6 +15,8 @@ import {
   createCourse,
   addCourseMeetings,
   deleteCourseMeetings,
+  updateCourseMeetings,
+  updateCourse,
   getCourseImpact,
   setCourseArchived,
   deleteCourse,
@@ -32,6 +35,29 @@ const DAYS = [
 
 const PALETTE = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#0ea5e9', '#a855f7', '#ec4899', '#84cc16'];
 
+const COURSE_FIELDS: Field[] = [
+  { name: 'code', label: 'Code', type: 'text', placeholder: 'EECS 203' },
+  { name: 'title', label: 'Title', type: 'text', required: true },
+  { name: 'location', label: 'Room', type: 'text', span: 2 },
+  { name: 'color', label: 'Colour', type: 'color', options: PALETTE, span: 2 },
+];
+
+const MEETING_FIELDS: Field[] = [
+  { name: 'weekdays', label: 'Days', type: 'weekdays', span: 2 },
+  { name: 'startsAt', label: 'Starts', type: 'time', required: true },
+  { name: 'endsAt', label: 'Ends', type: 'time', required: true },
+  {
+    name: 'kind',
+    label: 'Type',
+    type: 'select',
+    options: MEETING_KINDS.map((k) => ({ value: k.value, label: k.label })),
+  },
+  { name: 'location', label: 'Room', type: 'text' },
+  { name: 'url', label: 'Zoom / Meet link', type: 'text', span: 2 },
+  { name: 'startsOn', label: 'Term starts', type: 'date' },
+  { name: 'endsOn', label: 'Term ends', type: 'date' },
+];
+
 const inputClass =
   'w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]';
 
@@ -48,6 +74,9 @@ export type CourseWithMeetings = {
     starts_at: string;
     ends_at: string;
     location: string | null;
+    url: string | null;
+    starts_on: string | null;
+    ends_on: string | null;
   }>;
 };
 
@@ -408,6 +437,8 @@ function RemoveCourse({ course }: { course: CourseWithMeetings }) {
 
 export function CourseManager({ courses }: { courses: CourseWithMeetings[] }) {
   const router = useRouter();
+  const [editingMeeting, setEditingMeeting] = useState<string | null>(null);
+  const [editingCourse, setEditingCourse] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   return (
@@ -443,6 +474,13 @@ export function CourseManager({ courses }: { courses: CourseWithMeetings[] }) {
               </p>
             </div>
 
+            <button
+              onClick={() => setEditingCourse(course.id)}
+              className="shrink-0 rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs hover:border-[var(--color-accent)]"
+            >
+              Edit
+            </button>
+
             <Link
               href={`/courses/${course.id}`}
               className="shrink-0 rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs hover:border-[var(--color-accent)]"
@@ -451,33 +489,115 @@ export function CourseManager({ courses }: { courses: CourseWithMeetings[] }) {
             </Link>
           </div>
 
+          {editingCourse === course.id && (
+            <div className="mt-3">
+              <EditForm
+                fields={COURSE_FIELDS}
+                initial={{
+                  code: course.code ?? '',
+                  title: course.title,
+                  location: '',
+                  color: course.color,
+                }}
+                onSave={async (v: Record<string, FieldValue>) => {
+                  const result = await updateCourse(course.id, {
+                    title: String(v.title ?? ''),
+                    code: String(v.code ?? '') || null,
+                    color: String(v.color ?? course.color),
+                    location: String(v.location ?? '') || null,
+                  });
+
+                  if (result.ok) {
+                    setEditingCourse(null);
+                    startTransition(() => router.refresh());
+                  }
+                  return result;
+                }}
+                onCancel={() => setEditingCourse(null)}
+              />
+            </div>
+          )}
+
           {course.course_meetings.length > 0 && (
             <ul className="mt-3 space-y-1">
-              {groupMeetings(course.course_meetings).map((group) => (
-                <li
-                  key={group.ids.join(',')}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs"
-                >
-                  <span className="min-w-0">
-                    <span className="mr-2 rounded bg-[var(--color-panel)] px-1.5 py-0.5 text-[10px] uppercase text-[var(--color-muted)]">
-                      {meetingKindLabel(group.kind)}
-                    </span>
-                    <strong>{formatWeekdays(group.weekdays)}</strong>{' '}
-                    {formatTimeRange(group.startsAt, group.endsAt)}
-                    {group.location && ` · ${group.location}`}
-                  </span>
-                  <button
-                    onClick={async () => {
-                      await deleteCourseMeetings(group.ids);
-                      startTransition(() => router.refresh());
-                    }}
-                    className="shrink-0 text-[var(--color-muted)] hover:text-red-400"
-                    aria-label="Remove meeting time"
+              {groupMeetings(course.course_meetings).map((group) => {
+                const key = group.ids.join(',');
+
+                if (editingMeeting === key) {
+                  return (
+                    <li key={key}>
+                      <EditForm
+                        fields={MEETING_FIELDS}
+                        initial={{
+                          weekdays: group.weekdays,
+                          startsAt: group.startsAt.slice(0, 5),
+                          endsAt: group.endsAt.slice(0, 5),
+                          kind: group.kind,
+                          location: group.location ?? '',
+                          url: group.url ?? '',
+                          startsOn: group.startsOn ?? '',
+                          endsOn: group.endsOn ?? '',
+                        }}
+                        onSave={async (v: Record<string, FieldValue>) => {
+                          const result = await updateCourseMeetings(group.ids, {
+                            courseId: course.id,
+                            kind: String(v.kind),
+                            weekdays: (v.weekdays as number[]) ?? [],
+                            startsAt: String(v.startsAt),
+                            endsAt: String(v.endsAt),
+                            location: String(v.location ?? '') || null,
+                            url: String(v.url ?? '') || null,
+                            startsOn: String(v.startsOn ?? '') || null,
+                            endsOn: String(v.endsOn ?? '') || null,
+                          });
+
+                          if (result.ok) {
+                            setEditingMeeting(null);
+                            startTransition(() => router.refresh());
+                          }
+                          return result;
+                        }}
+                        onCancel={() => setEditingMeeting(null)}
+                      />
+                    </li>
+                  );
+                }
+
+                return (
+                  <li
+                    key={key}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs"
                   >
-                    ✕
-                  </button>
-                </li>
-              ))}
+                    <span className="min-w-0">
+                      <span className="mr-2 rounded bg-[var(--color-panel)] px-1.5 py-0.5 text-[10px] uppercase text-[var(--color-muted)]">
+                        {meetingKindLabel(group.kind)}
+                      </span>
+                      <strong>{formatWeekdays(group.weekdays)}</strong>{' '}
+                      {formatTimeRange(group.startsAt, group.endsAt)}
+                      {group.location && ` · ${group.location}`}
+                    </span>
+
+                    <span className="flex shrink-0 gap-2">
+                      <button
+                        onClick={() => setEditingMeeting(key)}
+                        className="text-[var(--color-accent)] hover:underline"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={async () => {
+                          await deleteCourseMeetings(group.ids);
+                          startTransition(() => router.refresh());
+                        }}
+                        className="text-[var(--color-muted)] hover:text-red-400"
+                        aria-label="Remove meeting time"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
 
