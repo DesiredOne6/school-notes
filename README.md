@@ -25,7 +25,7 @@ handwriting is planned but not yet built.
 | Course & class-schedule management | Built |
 | Multiple Google accounts (personal + university) | Built |
 | Settings — connect Canvas/Google, enable notifications | Built |
-| Notes editor (typed / images / handwriting) | Schema only — UI not built |
+| Notes editor — markdown, images, wiki-links, search | Built |
 | iPad companion app (PencilKit) | Not started |
 | Notion sync | Schema only |
 
@@ -280,13 +280,11 @@ web/src/
 
 ## Next steps
 
-1. **Notes editor** — the biggest remaining piece. Schema (`notes`,
-   `note_links`, `attachments`) is in place, including full-text search and
-   `[[wiki-link]]` backlinks; the editor UI is not.
-2. **Course hub pages** — professors, office hours, Zoom links, and syllabi all
-   have tables and no UI yet. (Courses and meeting times are done.)
-3. **iPad companion** — SwiftUI + PencilKit, writing `PKDrawing` blobs to the
+1. **iPad companion** — SwiftUI + PencilKit, writing `PKDrawing` blobs to the
    `notes` storage bucket and rows to `attachments` (`kind = 'ink'`). Ink
    transcription goes into `notes.body` so handwriting is searchable.
-4. **Notion sync** — the `integration_provider` enum and token storage already
+2. **Notion sync** — the `integration_provider` enum and token storage already
    account for it.
+3. **Handwriting** — `attachments.kind = 'ink'` and `ink_metadata` are reserved
+   for PencilKit drawings; transcribed text goes into `notes.body` so ink is
+   searchable alongside typed notes.

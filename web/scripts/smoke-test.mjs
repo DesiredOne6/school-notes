@@ -196,6 +196,65 @@ try {
     .eq('instructor_id', instructor.id);
   check('office hours cascade when the instructor is removed', orphanHours === 0, `${orphanHours}`);
 
+  console.log('\nNotes');
+
+  const { data: noteA, error: noteAErr } = await admin.from('notes').insert({
+    user_id: userId, course_id: course.id, title: 'Binary Search Trees',
+    body: 'A BST keeps keys ordered so lookup is logarithmic.',
+    tags: ['data-structures'],
+  }).select('id').single();
+  check('note inserted', !noteAErr && noteA, noteAErr?.message);
+
+  const { data: noteB } = await admin.from('notes').insert({
+    user_id: userId, course_id: course.id, title: 'Lecture 5',
+    body: 'Covered [[Binary Search Trees]] and rotations.',
+  }).select('id').single();
+
+  // search_vector is generated, so it must be populated without any app work.
+  const { data: found } = await admin
+    .from('notes').select('id, title')
+    .textSearch('search_vector', 'logarithmic', { type: 'websearch', config: 'english' });
+  check('full-text search finds body content', found?.some((n) => n.id === noteA.id),
+    `${found?.length} hits`);
+
+  const { data: byTitle } = await admin
+    .from('notes').select('id')
+    .textSearch('search_vector', 'rotations', { type: 'websearch', config: 'english' });
+  check('search matches a second note independently', byTitle?.some((n) => n.id === noteB.id));
+
+  const { data: phrase } = await admin
+    .from('notes').select('id')
+    .textSearch('search_vector', '"binary search"', { type: 'websearch', config: 'english' });
+  check('quoted phrase search works', (phrase?.length ?? 0) >= 1, `${phrase?.length}`);
+
+  // Link resolution stores id pairs; backlinks are then an indexed lookup.
+  const { error: linkInsertErr } = await admin.from('note_links').insert({
+    source_note_id: noteB.id, target_note_id: noteA.id,
+  });
+  check('note link inserted', !linkInsertErr, linkInsertErr?.message);
+
+  const { data: backlinks, error: backlinkErr } = await admin
+    .from('note_links')
+    .select('source_note_id, notes!note_links_source_note_id_fkey(id, title)')
+    .eq('target_note_id', noteA.id);
+  check('backlink query resolves the source note', !backlinkErr &&
+    backlinks?.[0]?.notes?.title === 'Lecture 5', backlinkErr?.message);
+
+  // Deleting the source note must not strand its links.
+  await admin.from('notes').delete().eq('id', noteB.id);
+  const { count: strandedLinks } = await admin
+    .from('note_links').select('*', { count: 'exact', head: true })
+    .eq('target_note_id', noteA.id);
+  check('links cascade when the source note is deleted', strandedLinks === 0, `${strandedLinks}`);
+
+  // Note images go to the notes bucket under the user's own folder.
+  const imgPath = `${userId}/${noteA.id}/diagram.png`;
+  const { error: imgErr } = await admin.storage
+    .from('notes')
+    .upload(imgPath, new Blob(['fake-png'], { type: 'image/png' }), { upsert: true });
+  check('note image uploads to the user-scoped path', !imgErr, imgErr?.message);
+  await admin.storage.from('notes').remove([imgPath]);
+
   console.log('\nStorage');
   const { data: buckets } = await admin.storage.listBuckets();
   const names = (buckets ?? []).map((b) => b.name).sort();
