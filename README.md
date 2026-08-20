@@ -184,9 +184,14 @@ also survives moving the app off Vercel — only the URL changes.
 Inspect runs with:
 
 ```sql
-select jobname, status, start_time from cron.job_run_details
-order by start_time desc limit 10;
+select j.jobname, d.status, d.start_time
+from cron.job_run_details d
+join cron.job j on j.jobid = d.jobid
+order by d.start_time desc limit 10;
 ```
+
+> `cron.job_run_details` keys on `jobid`, not `jobname` — the name lives on
+> `cron.job`.
 
 ---
 

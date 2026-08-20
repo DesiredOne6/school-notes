@@ -106,4 +106,5 @@ SQL
 echo
 echo "✓ Scheduled against ${APP_URL}"
 echo "  Check recent runs with:"
-echo "    select jobname, status, start_time from cron.job_run_details order by start_time desc limit 10;"
+echo "    select j.jobname, d.status, d.start_time from cron.job_run_details d"
+echo "      join cron.job j on j.jobid = d.jobid order by d.start_time desc limit 10;"

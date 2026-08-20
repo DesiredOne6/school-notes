@@ -54,21 +54,19 @@ done
 echo "→ first deploy (to discover the production URL)"
 npx --yes vercel deploy --prod --yes >/dev/null
 
-URL="$(npx --yes vercel inspect --json 2>/dev/null | node -e '
+# The stable production alias, NOT the per-deployment URL. A deployment URL
+# like web-reehw7ri5-*.vercel.app changes on every deploy, which would break
+# the Google redirect URI and require re-registering it each time.
+URL="$(npx --yes vercel project ls 2>/dev/null | node -e '
 let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
-  try { const j=JSON.parse(s); console.log(j.alias?.[0] ?? j.url ?? ""); } catch { console.log(""); }
+  const line = s.split("\n").find(l => /https:\/\/\S+\.vercel\.app/.test(l));
+  const m = line && line.match(/https:\/\/(\S+\.vercel\.app)/);
+  console.log(m ? m[1] : "");
 });' || true)"
 
 if [ -z "$URL" ]; then
-  URL="$(npx --yes vercel ls --json 2>/dev/null | node -e '
-let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
-  try { const j=JSON.parse(s); console.log(j?.deployments?.[0]?.url ?? ""); } catch { console.log(""); }
-});' || true)"
-fi
-
-if [ -z "$URL" ]; then
-  echo "Could not determine the deployment URL. Run 'npx vercel ls' and pass it to" >&2
-  echo "scripts/setup-scheduling.sh manually." >&2
+  echo "Could not determine the stable production domain. Run 'npx vercel project ls'" >&2
+  echo "and pass the URL to scripts/setup-scheduling.sh manually." >&2
   exit 1
 fi
 
