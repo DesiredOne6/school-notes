@@ -255,6 +255,30 @@ try {
   check('note image uploads to the user-scoped path', !imgErr, imgErr?.message);
   await admin.storage.from('notes').remove([imgPath]);
 
+  // Handwriting stores a PNG for embedding plus vector JSON for re-editing.
+  const inkBase = `${userId}/${noteA.id}/ink-test`;
+  await admin.storage.from('notes')
+    .upload(`${inkBase}.png`, new Blob(['png'], { type: 'image/png' }), { upsert: true });
+  await admin.storage.from('notes')
+    .upload(`${inkBase}.json`, new Blob(['{"version":1,"strokes":[]}'], { type: 'application/json' }), { upsert: true });
+
+  const { error: inkErr } = await admin.from('attachments').insert({
+    user_id: userId, note_id: noteA.id, kind: 'ink',
+    storage_path: `${inkBase}.png`, filename: 'handwriting.png', mime_type: 'image/png',
+    byte_size: 3,
+    ink_metadata: { vector_path: `${inkBase}.json`, stroke_count: 0, width: 1200, height: 420 },
+  });
+  check('ink attachment records its vector path', !inkErr, inkErr?.message);
+
+  const { data: inkRow } = await admin
+    .from('attachments').select('kind, ink_metadata')
+    .eq('note_id', noteA.id).eq('kind', 'ink').maybeSingle();
+  check('ink metadata round-trips as jsonb',
+    inkRow?.ink_metadata?.vector_path === `${inkBase}.json`,
+    JSON.stringify(inkRow?.ink_metadata));
+
+  await admin.storage.from('notes').remove([`${inkBase}.png`, `${inkBase}.json`]);
+
   console.log('\nStorage');
   const { data: buckets } = await admin.storage.listBuckets();
   const names = (buckets ?? []).map((b) => b.name).sort();

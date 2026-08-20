@@ -156,13 +156,21 @@ export async function deleteNote(id: string): Promise<ActionResult> {
   return { ok: true };
 }
 
-/** Records an image uploaded from the editor. */
+/**
+ * Records a file attached to a note.
+ *
+ * Handwriting stores `kind: 'ink'` with the vector path in ink_metadata, so
+ * the strokes can be reopened and edited later while the PNG beside them is
+ * what the markdown actually embeds.
+ */
 export async function recordAttachment(input: {
   noteId: string;
   storagePath: string;
   filename: string;
   mimeType: string;
   byteSize: number;
+  kind?: 'image' | 'ink';
+  inkMetadata?: Record<string, unknown>;
 }): Promise<ActionResult> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: 'Not signed in' };
@@ -172,11 +180,12 @@ export async function recordAttachment(input: {
   const { error } = await supabase.from('attachments').insert({
     user_id: user.id,
     note_id: input.noteId,
-    kind: 'image',
+    kind: input.kind ?? 'image',
     storage_path: input.storagePath,
     filename: input.filename,
     mime_type: input.mimeType,
     byte_size: input.byteSize,
+    ink_metadata: input.inkMetadata ?? null,
   });
 
   if (error) return { ok: false, error: error.message };

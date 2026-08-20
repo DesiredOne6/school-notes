@@ -8,6 +8,8 @@ import remarkGfm from 'remark-gfm';
 import { createClient } from '@/lib/supabase/client';
 import { updateNote, deleteNote, recordAttachment } from '@/app/actions/notes';
 import { wikiLinksToMarkdown, normalizeTitle } from '@/lib/notes/wikilinks';
+import { InkCanvas } from './InkCanvas';
+import { drawingBounds, type InkDrawing } from '@/lib/ink/strokes';
 
 const inputClass =
   'w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]';
@@ -53,6 +55,7 @@ export function NoteEditor({
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [inkOpen, setInkOpen] = useState(false);
   const [, startTransition] = useTransition();
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -127,6 +130,55 @@ export function NoteEditor({
       } finally {
         setUploading(false);
       }
+    },
+    [note.id, userId, body.length],
+  );
+
+  /**
+   * Saves handwriting as two files: the PNG the markdown embeds, and the
+   * vector JSON beside it so the strokes stay editable rather than being
+   * flattened into pixels forever.
+   */
+  const saveInk = useCallback(
+    async (drawing: InkDrawing, png: Blob) => {
+      const supabase = createClient();
+      const stamp = Date.now();
+      const base = `${userId}/${note.id}/ink-${stamp}`;
+
+      const { error: pngError } = await supabase.storage
+        .from('notes')
+        .upload(`${base}.png`, png, { contentType: 'image/png', upsert: false });
+      if (pngError) throw new Error(pngError.message);
+
+      const vector = new Blob([JSON.stringify(drawing)], { type: 'application/json' });
+      const { error: jsonError } = await supabase.storage
+        .from('notes')
+        .upload(`${base}.json`, vector, { contentType: 'application/json', upsert: false });
+      if (jsonError) throw new Error(jsonError.message);
+
+      await recordAttachment({
+        noteId: note.id,
+        storagePath: `${base}.png`,
+        filename: `handwriting-${stamp}.png`,
+        mimeType: 'image/png',
+        byteSize: png.size,
+        kind: 'ink',
+        inkMetadata: {
+          vector_path: `${base}.json`,
+          stroke_count: drawing.strokes.length,
+          width: drawing.width,
+          height: drawing.height,
+          bounds: drawingBounds(drawing),
+        },
+      });
+
+      const markdown = `\n![handwriting](/api/notes/image?path=${encodeURIComponent(`${base}.png`)})\n`;
+
+      const el = textareaRef.current;
+      const at = el?.selectionStart ?? body.length;
+      setBody((prev) => prev.slice(0, at) + markdown + prev.slice(at));
+      markDirty();
+      setInkOpen(false);
     },
     [note.id, userId, body.length],
   );
@@ -280,6 +332,19 @@ export function NoteEditor({
           spellCheck
           className="min-h-[24rem] w-full resize-y rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-5 font-mono text-sm leading-relaxed outline-none focus:border-[var(--color-accent)]"
         />
+      )}
+
+      {!preview && !inkOpen && (
+        <button
+          onClick={() => setInkOpen(true)}
+          className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm hover:border-[var(--color-accent)]"
+        >
+          ✍️ Add handwriting
+        </button>
+      )}
+
+      {inkOpen && (
+        <InkCanvas onSave={saveInk} onCancel={() => setInkOpen(false)} />
       )}
 
       {uploading && <p className="text-xs text-[var(--color-muted)]">Uploading image…</p>}

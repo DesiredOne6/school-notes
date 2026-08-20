@@ -4,8 +4,12 @@ A Notion/Obsidian-style app for school: notes, assignments, tests, course info,
 Canvas import, calendar sync, and deadline reminders.
 
 **Stack:** Next.js 16 (App Router) · Supabase (Postgres + Auth + Storage) ·
-Google Calendar API · Web Push. A native iPadOS companion for Apple Pencil
-handwriting is planned but not yet built.
+Google Calendar API · Notion API · Web Push.
+
+Handwriting is built into the web app rather than a native tablet app. Stylus
+input comes from the Pointer Events API, which exposes pressure and tilt for the
+S Pen on Windows Ink and Apple Pencil in Safari alike — so one implementation
+covers every device instead of an Apple-only one.
 
 ---
 
@@ -26,8 +30,8 @@ handwriting is planned but not yet built.
 | Multiple Google accounts (personal + university) | Built |
 | Settings — connect Canvas/Google, enable notifications | Built |
 | Notes editor — markdown, images, wiki-links, search | Built |
-| iPad companion app (PencilKit) | Not started |
-| Notion sync | Schema only |
+| Handwriting (stylus, pressure-sensitive) | Built — works with the S Pen |
+| Notion sync | Built |
 
 ---
 
@@ -280,7 +284,10 @@ web/src/
 
 ## Next steps
 
-1. **iPad companion** — SwiftUI + PencilKit, writing `PKDrawing` blobs to the
+1. **Handwriting refinements** — reopening a saved drawing to edit it (the
+   vector JSON is already stored for this), and OCR so ink is searchable
+   alongside typed notes via `notes.body`.
+2. **Old: iPad companion** — SwiftUI + PencilKit, writing `PKDrawing` blobs to the
    `notes` storage bucket and rows to `attachments` (`kind = 'ink'`). Ink
    transcription goes into `notes.body` so handwriting is searchable.
 2. **Notion sync** — the `integration_provider` enum and token storage already
