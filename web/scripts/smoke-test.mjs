@@ -327,6 +327,49 @@ try {
 
   await admin.storage.from('notes').remove([`${pageBase}.json`]);
 
+  console.log('\nCourse deletion');
+
+  // The confirmation dialog tells the user assignments go and notes survive.
+  // If these cascades ever change, that message becomes a lie.
+  const { data: doomed } = await admin.from('courses').insert({
+    user_id: userId, code: 'TEMP 100', title: 'Course to delete',
+  }).select('id').single();
+
+  const { data: doomedAssignment } = await admin.from('assignments').insert({
+    user_id: userId, course_id: doomed.id, title: 'Goes with the course',
+    due_at: new Date(Date.now() + 86400000).toISOString(),
+  }).select('id').single();
+
+  const { data: survivingNote } = await admin.from('notes').insert({
+    user_id: userId, course_id: doomed.id, title: 'Survives the course',
+  }).select('id').single();
+
+  await admin.from('course_meetings').insert({
+    user_id: userId, course_id: doomed.id, weekday: 2, starts_at: '09:00', ends_at: '10:00',
+  });
+
+  await admin.from('courses').delete().eq('id', doomed.id);
+
+  const { count: assignmentsLeft } = await admin
+    .from('assignments').select('*', { count: 'exact', head: true }).eq('id', doomedAssignment.id);
+  check('deleting a course deletes its assignments', assignmentsLeft === 0, `${assignmentsLeft}`);
+
+  const { count: meetingsLeft } = await admin
+    .from('course_meetings').select('*', { count: 'exact', head: true }).eq('course_id', doomed.id);
+  check('deleting a course deletes its meeting times', meetingsLeft === 0, `${meetingsLeft}`);
+
+  const { data: noteAfter } = await admin
+    .from('notes').select('id, course_id').eq('id', survivingNote.id).maybeSingle();
+  check('notes survive their course being deleted', Boolean(noteAfter), 'note was destroyed');
+  check('the surviving note loses its course rather than pointing at a ghost',
+    noteAfter?.course_id === null, `${noteAfter?.course_id}`);
+
+  // Reminders belong to the assignment, so they must go with it.
+  const { count: remindersLeft } = await admin
+    .from('reminders').select('*', { count: 'exact', head: true })
+    .eq('assignment_id', doomedAssignment.id);
+  check('reminders for a deleted assignment are removed', remindersLeft === 0, `${remindersLeft}`);
+
   console.log('\nStorage');
   const { data: buckets } = await admin.storage.listBuckets();
   const names = (buckets ?? []).map((b) => b.name).sort();

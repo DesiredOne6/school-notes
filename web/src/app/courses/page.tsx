@@ -8,8 +8,9 @@ export default async function CoursesPage() {
 
   const { data, error } = await supabase
     .from('courses')
-    .select('id, code, title, color, course_meetings(id, kind, weekday, starts_at, ends_at, location)')
-    .is('archived_at', null)
+    // Archived courses are listed too, greyed out, so they can be restored.
+    .select('id, code, title, color, archived_at, course_meetings(id, kind, weekday, starts_at, ends_at, location)')
+    .order('archived_at', { ascending: true, nullsFirst: true })
     .order('code', { ascending: true, nullsFirst: false });
 
   if (error) {

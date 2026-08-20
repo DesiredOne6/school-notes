@@ -98,3 +98,102 @@ export async function deleteCourseMeeting(meetingId: string): Promise<ActionResu
   revalidatePath('/calendar');
   return { ok: true };
 }
+
+export type CourseImpact = {
+  assignments: number;
+  notes: number;
+  documents: number;
+  meetings: number;
+  links: number;
+  instructors: number;
+};
+
+/**
+ * What deleting a course would take with it.
+ *
+ * Shown before the confirmation because the cascade is not obvious: assignments
+ * and documents go with the course, while notes survive and simply lose their
+ * course.
+ */
+export async function getCourseImpact(courseId: string): Promise<CourseImpact | null> {
+  const user = await getCurrentUser();
+  if (!user) return null;
+
+  const supabase = await createServerSupabase();
+  const count = async (table: string, column = 'course_id') => {
+    const { count: n } = await supabase
+      .from(table as 'assignments')
+      .select('*', { count: 'exact', head: true })
+      .eq(column, courseId);
+    return n ?? 0;
+  };
+
+  const [assignments, notes, documents, meetings, links, instructors] = await Promise.all([
+    count('assignments'),
+    count('notes'),
+    count('documents'),
+    count('course_meetings'),
+    count('course_links'),
+    count('instructors'),
+  ]);
+
+  return { assignments, notes, documents, meetings, links, instructors };
+}
+
+/** Hides a finished course without destroying anything. */
+export async function setCourseArchived(
+  courseId: string,
+  archived: boolean,
+): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: 'Not signed in' };
+
+  const supabase = await createServerSupabase();
+  const { error } = await supabase
+    .from('courses')
+    .update({ archived_at: archived ? new Date().toISOString() : null })
+    .eq('id', courseId);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath('/courses');
+  revalidatePath('/calendar');
+  revalidatePath('/');
+  return { ok: true };
+}
+
+/**
+ * Deletes a course and everything that cascades from it.
+ *
+ * Stored files are removed first: the database cascade drops the document rows
+ * but knows nothing about the objects in storage, which would otherwise be
+ * orphaned and keep consuming quota forever.
+ */
+export async function deleteCourse(courseId: string): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: 'Not signed in' };
+
+  const supabase = await createServerSupabase();
+
+  const { data: documents } = await supabase
+    .from('documents')
+    .select('storage_path')
+    .eq('course_id', courseId);
+
+  const paths = (documents ?? [])
+    .map((d) => d.storage_path)
+    .filter((p): p is string => Boolean(p));
+
+  if (paths.length > 0) {
+    await supabase.storage.from('documents').remove(paths);
+  }
+
+  const { error } = await supabase.from('courses').delete().eq('id', courseId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath('/courses');
+  revalidatePath('/calendar');
+  revalidatePath('/');
+  revalidatePath('/notes');
+  return { ok: true };
+}

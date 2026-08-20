@@ -3,7 +3,15 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createCourse, addCourseMeetings, deleteCourseMeeting } from '@/app/actions/courses';
+import {
+  createCourse,
+  addCourseMeetings,
+  deleteCourseMeeting,
+  getCourseImpact,
+  setCourseArchived,
+  deleteCourse,
+  type CourseImpact,
+} from '@/app/actions/courses';
 
 const DAYS = [
   { value: 1, label: 'Mon' },
@@ -25,6 +33,7 @@ export type CourseWithMeetings = {
   code: string | null;
   title: string;
   color: string;
+  archived_at: string | null;
   course_meetings: Array<{
     id: string;
     kind: string;
@@ -271,6 +280,128 @@ function MeetingForm({ courseId }: { courseId: string }) {
 
 const DAY_LABEL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+/**
+ * Removal controls. Deleting a course cascades to its assignments and
+ * documents, so the counts are fetched and shown before confirming rather than
+ * relying on the user to know what a cascade does.
+ */
+function RemoveCourse({ course }: { course: CourseWithMeetings }) {
+  const router = useRouter();
+  const [impact, setImpact] = useState<CourseImpact | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [, startTransition] = useTransition();
+
+  const refresh = () => startTransition(() => router.refresh());
+
+  async function begin() {
+    setBusy(true);
+    setError('');
+    const result = await getCourseImpact(course.id);
+    setImpact(result);
+    setConfirming(true);
+    setBusy(false);
+  }
+
+  if (!confirming) {
+    return (
+      <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--color-border)] pt-3">
+        <button
+          onClick={async () => {
+            setBusy(true);
+            await setCourseArchived(course.id, !course.archived_at);
+            setBusy(false);
+            refresh();
+          }}
+          disabled={busy}
+          className="rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs hover:border-[var(--color-accent)] disabled:opacity-50"
+        >
+          {course.archived_at ? 'Unarchive' : 'Archive'}
+        </button>
+        <button
+          onClick={begin}
+          disabled={busy}
+          className="rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-muted)] hover:border-red-400 hover:text-red-400 disabled:opacity-50"
+        >
+          Delete
+        </button>
+      </div>
+    );
+  }
+
+  const willDelete = [
+    impact?.assignments ? `${impact.assignments} assignment${impact.assignments === 1 ? '' : 's'}` : null,
+    impact?.documents ? `${impact.documents} document${impact.documents === 1 ? '' : 's'}` : null,
+    impact?.meetings ? `${impact.meetings} meeting time${impact.meetings === 1 ? '' : 's'}` : null,
+    impact?.instructors ? `${impact.instructors} person/people` : null,
+    impact?.links ? `${impact.links} link${impact.links === 1 ? '' : 's'}` : null,
+  ].filter(Boolean);
+
+  return (
+    <div className="mt-3 space-y-2 rounded-lg border border-red-500/40 bg-red-500/10 p-3">
+      <p className="text-xs font-medium text-red-300">
+        Delete {course.code ?? course.title}?
+      </p>
+
+      {willDelete.length > 0 ? (
+        <p className="text-xs text-red-300">
+          This also deletes {willDelete.join(', ')}.
+        </p>
+      ) : (
+        <p className="text-xs text-red-300">Nothing else is attached to this course.</p>
+      )}
+
+      {Boolean(impact?.notes) && (
+        <p className="text-xs text-[var(--color-muted)]">
+          {impact!.notes} note{impact!.notes === 1 ? '' : 's'} will be kept, but lose their course.
+        </p>
+      )}
+
+      <p className="text-xs text-[var(--color-muted)]">
+        Archiving hides it instead and keeps everything.
+      </p>
+
+      {error && <p className="text-xs text-red-400">{error}</p>}
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={async () => {
+            setBusy(true);
+            const result = await deleteCourse(course.id);
+            setBusy(false);
+            if (result.ok) refresh();
+            else setError(result.error);
+          }}
+          disabled={busy}
+          className="rounded-lg bg-red-500/80 px-2.5 py-1 text-xs font-medium text-white disabled:opacity-50"
+        >
+          {busy ? 'Deleting…' : 'Delete permanently'}
+        </button>
+        <button
+          onClick={async () => {
+            setBusy(true);
+            await setCourseArchived(course.id, true);
+            setBusy(false);
+            setConfirming(false);
+            refresh();
+          }}
+          disabled={busy}
+          className="rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs disabled:opacity-50"
+        >
+          Archive instead
+        </button>
+        <button
+          onClick={() => { setConfirming(false); setError(''); }}
+          className="rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function CourseManager({ courses }: { courses: CourseWithMeetings[] }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -288,7 +419,9 @@ export function CourseManager({ courses }: { courses: CourseWithMeetings[] }) {
       {courses.map((course) => (
         <section
           key={course.id}
-          className="rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-4"
+          className={`rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-4 ${
+            course.archived_at ? 'opacity-60' : ''
+          }`}
         >
           <div className="flex items-center gap-3">
             <span aria-hidden className="h-8 w-1 rounded-full" style={{ background: course.color }} />
@@ -299,6 +432,7 @@ export function CourseManager({ courses }: { courses: CourseWithMeetings[] }) {
                 </Link>
               </h2>
               <p className="text-xs text-[var(--color-muted)]">
+                {course.archived_at && <span className="mr-1 text-amber-400">Archived ·</span>}
                 {course.course_meetings.length === 0
                   ? 'No meeting times set'
                   : `${course.course_meetings.length} meeting time${course.course_meetings.length === 1 ? '' : 's'}`}
@@ -346,6 +480,8 @@ export function CourseManager({ courses }: { courses: CourseWithMeetings[] }) {
           <div className="mt-3">
             <MeetingForm courseId={course.id} />
           </div>
+
+          <RemoveCourse course={course} />
         </section>
       ))}
     </div>
