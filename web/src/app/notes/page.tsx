@@ -10,6 +10,7 @@ type NoteRow = {
   title: string;
   body: string;
   tags: string[];
+  kind: string;
   updated_at: string;
   courses: { code: string | null; title: string; color: string } | null;
 };
@@ -25,7 +26,7 @@ export default async function NotesPage({
 
   let builder = supabase
     .from('notes')
-    .select('id, title, body, tags, updated_at, courses(code, title, color)')
+    .select('id, title, body, tags, kind, updated_at, courses(code, title, color)')
     .is('archived_at', null);
 
   if (query) {
@@ -121,9 +122,14 @@ export default async function NotesPage({
                 style={{ background: note.courses?.color ?? '#3f3f52' }}
               />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{note.title}</p>
+                <p className="truncate text-sm font-medium">
+                  {note.kind === 'handwritten' && <span aria-hidden className="mr-1.5">✍️</span>}
+                  {note.title}
+                </p>
                 <p className="mt-0.5 line-clamp-2 text-xs text-[var(--color-muted)]">
-                  {toPlainPreview(note.body) || 'Empty note'}
+                  {note.kind === 'handwritten'
+                    ? 'Handwritten page'
+                    : toPlainPreview(note.body) || 'Empty note'}
                 </p>
                 <p className="mt-1 text-[10px] text-[var(--color-muted)]">
                   {note.courses?.code ?? note.courses?.title ?? 'No course'} ·{' '}

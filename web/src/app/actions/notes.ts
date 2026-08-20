@@ -57,6 +57,7 @@ const createSchema = z.object({
   title: z.string().trim().max(300).default('Untitled'),
   courseId: z.string().uuid().nullable(),
   body: z.string().max(500_000).default(''),
+  kind: z.enum(['page', 'handwritten', 'mixed']).default('page'),
 });
 
 export async function createNote(
@@ -79,6 +80,7 @@ export async function createNote(
       title: parsed.data.title || 'Untitled',
       course_id: parsed.data.courseId,
       body: parsed.data.body,
+      kind: parsed.data.kind,
     })
     .select('id')
     .single();

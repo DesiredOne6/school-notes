@@ -279,6 +279,33 @@ try {
 
   await admin.storage.from('notes').remove([`${inkBase}.png`, `${inkBase}.json`]);
 
+  // A handwritten page: one note of kind 'handwritten' with a single ink
+  // attachment overwritten in place by autosave.
+  const { data: penNote } = await admin.from('notes').insert({
+    user_id: userId, course_id: course.id, title: 'Lecture 6 (handwritten)',
+    kind: 'handwritten',
+  }).select('id, kind').single();
+  check('handwritten note stores its kind', penNote?.kind === 'handwritten', penNote?.kind);
+
+  const pageBase = `${userId}/${penNote.id}/page`;
+  for (const round of [1, 2]) {
+    // upsert:true is what makes autosave overwrite rather than accumulate.
+    const { error } = await admin.storage.from('notes').upload(
+      `${pageBase}.json`,
+      new Blob([JSON.stringify({ version: 1, width: 1200, height: 1200, strokes: [] })],
+        { type: 'application/json' }),
+      { upsert: true },
+    );
+    check(`autosave round ${round} overwrites in place`, !error, error?.message);
+  }
+
+  const { data: pageFiles } = await admin.storage.from('notes').list(`${userId}/${penNote.id}`);
+  check('repeated autosaves leave exactly one vector file',
+    (pageFiles ?? []).filter((f) => f.name.endsWith('.json')).length === 1,
+    (pageFiles ?? []).map((f) => f.name).join(', '));
+
+  await admin.storage.from('notes').remove([`${pageBase}.json`]);
+
   console.log('\nStorage');
   const { data: buckets } = await admin.storage.listBuckets();
   const names = (buckets ?? []).map((b) => b.name).sort();
