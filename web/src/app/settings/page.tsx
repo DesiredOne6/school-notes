@@ -5,6 +5,7 @@ import { NotificationToggle } from '@/components/NotificationToggle';
 import { GoogleAccounts, type AccountRow } from '@/components/GoogleAccounts';
 import { ChangePassword } from '@/components/ChangePassword';
 import { NotionConnect } from '@/components/NotionConnect';
+import { CalendarPrefs } from '@/components/CalendarPrefs';
 
 const GOOGLE_MESSAGES: Record<string, string> = {
   connected: 'Google Calendar connected.',
@@ -36,6 +37,11 @@ export default async function SettingsPage({
   const params = await searchParams;
   const supabase = await createServerSupabase();
   const { data: auth } = await supabase.auth.getUser();
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('hide_duplicate_class_events')
+    .eq('id', auth.user!.id)
+    .maybeSingle();
 
   const [{ data: integrations }, { data: calendars }] = await Promise.all([
     supabase
@@ -127,6 +133,12 @@ export default async function SettingsPage({
         description="Due dates are written to a dedicated 'School' calendar, so your own calendars are never edited. Your other calendars are read so class, club, and personal events appear in the calendar view."
       >
         <GoogleAccounts accounts={googleAccounts} />
+
+        <div className="mt-4 border-t border-[var(--color-border)] pt-3">
+          <CalendarPrefs
+            hideDuplicates={profile?.hide_duplicate_class_events ?? true}
+          />
+        </div>
       </Panel>
 
       <Panel

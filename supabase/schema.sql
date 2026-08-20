@@ -813,3 +813,17 @@ create policy notion_links_owner on public.notion_page_links
 drop trigger if exists touch_notion_links on public.notion_page_links;
 create trigger touch_notion_links before update on public.notion_page_links
   for each row execute function public.touch_updated_at();
+
+-- ---------------------------------------------------------------------------
+-- 20260819000008_dedupe_pref.sql
+-- ---------------------------------------------------------------------------
+
+-- Whether to hide external calendar events that duplicate a class already on
+-- the timetable.
+--
+-- On by default: a university publishing class times to Google is common, and
+-- seeing every lecture twice makes the calendar useless. Off is available for
+-- anyone whose events don't actually duplicate.
+
+alter table public.profiles
+  add column if not exists hide_duplicate_class_events boolean not null default true;

@@ -34,6 +34,7 @@ export type Profile = {
   default_reminder_offsets: number[];
   quiet_hours_start: string | null;
   quiet_hours_end: string | null;
+  hide_duplicate_class_events: boolean;
   created_at: string;
   updated_at: string;
 };

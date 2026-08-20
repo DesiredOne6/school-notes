@@ -12,6 +12,30 @@ const courseSchema = z.object({
   location: z.string().trim().max(200).nullable(),
 });
 
+export async function updateCourse(
+  courseId: string,
+  input: unknown,
+): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: 'Not signed in' };
+
+  const parsed = courseSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid input' };
+  }
+
+  const supabase = await createServerSupabase();
+  const { error } = await supabase.from('courses').update(parsed.data).eq('id', courseId);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath('/courses');
+  revalidatePath(`/courses/${courseId}`);
+  revalidatePath('/calendar');
+  revalidatePath('/');
+  return { ok: true };
+}
+
 export async function createCourse(input: unknown): Promise<ActionResult> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: 'Not signed in' };
@@ -90,6 +114,59 @@ export async function addCourseMeetings(input: unknown): Promise<ActionResult> {
  * single line but is two rows, and deleting only one would silently leave half
  * the class on the calendar.
  */
+/**
+ * Replaces one grouped meeting time.
+ *
+ * Editing can change which weekdays are involved, so the old rows are removed
+ * and new ones inserted rather than trying to reconcile them one by one.
+ */
+export async function updateCourseMeetings(
+  meetingIds: string[],
+  input: unknown,
+): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: 'Not signed in' };
+
+  const parsed = meetingSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid input' };
+  }
+
+  const m = parsed.data;
+  if (m.endsAt <= m.startsAt) {
+    return { ok: false, error: 'The end time must be after the start time' };
+  }
+
+  const supabase = await createServerSupabase();
+
+  const { error: insertError } = await supabase.from('course_meetings').insert(
+    m.weekdays.map((weekday) => ({
+      user_id: user.id,
+      course_id: m.courseId,
+      kind: m.kind,
+      weekday,
+      starts_at: m.startsAt,
+      ends_at: m.endsAt,
+      location: m.location,
+      url: m.url,
+      starts_on: m.startsOn,
+      ends_on: m.endsOn,
+    })),
+  );
+
+  if (insertError) return { ok: false, error: insertError.message };
+
+  // Only remove the old rows once the replacements are safely in.
+  if (meetingIds.length > 0) {
+    await supabase.from('course_meetings').delete().in('id', meetingIds);
+  }
+
+  revalidatePath('/courses');
+  revalidatePath(`/courses/${m.courseId}`);
+  revalidatePath('/calendar');
+  return { ok: true };
+}
+
 export async function deleteCourseMeetings(meetingIds: string[]): Promise<ActionResult> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: 'Not signed in' };

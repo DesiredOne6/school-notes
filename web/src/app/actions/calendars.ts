@@ -84,3 +84,21 @@ export async function disconnectIntegration(integrationId: string): Promise<Acti
   revalidatePath('/calendar');
   return { ok: true };
 }
+
+/** Toggles hiding external events that duplicate the user's own class times. */
+export async function setHideDuplicateClasses(hide: boolean): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: 'Not signed in' };
+
+  const supabase = await createServerSupabase();
+  const { error } = await supabase
+    .from('profiles')
+    .update({ hide_duplicate_class_events: hide })
+    .eq('id', user.id);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath('/calendar');
+  revalidatePath('/settings');
+  return { ok: true };
+}

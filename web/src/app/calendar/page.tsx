@@ -6,6 +6,7 @@ import {
   eventsToAgenda,
   groupByDay,
   weekRange,
+  dedupeClassEvents,
   type AgendaItem,
   type MeetingRow,
   type AssignmentRow,
@@ -79,11 +80,12 @@ export default async function CalendarPage({
   const { data: auth } = await supabase.auth.getUser();
   const { data: profile } = await supabase
     .from('profiles')
-    .select('timezone')
+    .select('timezone, hide_duplicate_class_events')
     .eq('id', auth.user!.id)
     .maybeSingle();
 
   const timeZone = profile?.timezone ?? 'America/New_York';
+  const hideDuplicates = profile?.hide_duplicate_class_events ?? true;
 
   // ?week=YYYY-MM-DD anchors the view; without it, this week.
   const anchor = params.week ? new Date(`${params.week}T12:00:00Z`) : new Date();
@@ -108,11 +110,16 @@ export default async function CalendarPage({
       .eq('external_calendars.is_visible', true),
   ]);
 
-  const items: AgendaItem[] = [
+  const allItems: AgendaItem[] = [
     ...expandMeetings((meetingsRes.data ?? []) as unknown as MeetingRow[], start, end, timeZone),
     ...assignmentsToAgenda((assignmentsRes.data ?? []) as unknown as AssignmentRow[]),
     ...eventsToAgenda((eventsRes.data ?? []) as unknown as EventRow[]),
   ];
+
+  // A university that publishes class times to Google would otherwise show
+  // every lecture twice — once from the course schedule, once from the feed.
+  const items = hideDuplicates ? dedupeClassEvents(allItems) : allItems;
+  const hiddenCount = allItems.length - items.length;
 
   const byDay = groupByDay(items, timeZone);
   const startKey = zonedDateKey(start, timeZone);
@@ -215,6 +222,16 @@ export default async function CalendarPage({
 
       <p className="text-xs text-[var(--color-muted)]">
         📌 = assignment due · coloured bars match your course and calendar colours
+        {hiddenCount > 0 && (
+          <>
+            {' · '}
+            {hiddenCount} duplicate{hiddenCount === 1 ? '' : 's'} of your class times hidden (
+            <Link href="/settings" className="text-[var(--color-accent)] hover:underline">
+              change
+            </Link>
+            )
+          </>
+        )}
       </p>
     </div>
   );

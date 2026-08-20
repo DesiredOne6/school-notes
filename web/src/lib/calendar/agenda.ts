@@ -177,6 +177,52 @@ export function eventsToAgenda(events: EventRow[]): AgendaItem[] {
 }
 
 /**
+ * Drops external calendar events that duplicate a class already on the
+ * timetable.
+ *
+ * University calendars often publish class times to Google, so a class the user
+ * has also entered as a course meeting appears twice. The course meeting is
+ * kept because it carries the room, the meeting type, and the course colour;
+ * the Google copy usually carries none of that.
+ *
+ * An event is treated as a duplicate when it starts within `toleranceMinutes`
+ * of a class occurrence AND either:
+ *   - its title mentions the course (the class item's title is the course code), or
+ *   - its end time also lines up, meaning it occupies exactly the same slot.
+ *
+ * Both conditions are required so an unrelated event that merely starts at the
+ * same time as a lecture is not silently hidden.
+ */
+export function dedupeClassEvents(
+  items: AgendaItem[],
+  toleranceMinutes = 15,
+): AgendaItem[] {
+  const classes = items.filter((i) => i.kind === 'class');
+  if (classes.length === 0) return items;
+
+  const toleranceMs = toleranceMinutes * 60_000;
+
+  return items.filter((item) => {
+    if (item.kind !== 'event') return true;
+
+    return !classes.some((klass) => {
+      const startsTogether =
+        Math.abs(item.startsAt.getTime() - klass.startsAt.getTime()) <= toleranceMs;
+      if (!startsTogether) return false;
+
+      const mentionsCourse = item.title.toLowerCase().includes(klass.title.toLowerCase());
+
+      const endsTogether =
+        item.endsAt !== null &&
+        klass.endsAt !== null &&
+        Math.abs(item.endsAt.getTime() - klass.endsAt.getTime()) <= toleranceMs;
+
+      return mentionsCourse || endsTogether;
+    });
+  });
+}
+
+/**
  * Groups agenda items by calendar day in the user's timezone.
  *
  * All-day items sort first within a day; the rest sort by start time, with

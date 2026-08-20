@@ -49,6 +49,28 @@ export async function addInstructor(input: unknown): Promise<ActionResult> {
   return { ok: true };
 }
 
+export async function updateInstructor(
+  id: string,
+  input: unknown,
+): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: 'Not signed in' };
+
+  const parsed = instructorSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid input' };
+  }
+
+  const { courseId, ...rest } = parsed.data;
+  const supabase = await createServerSupabase();
+  const { error } = await supabase.from('instructors').update(rest).eq('id', id);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/courses/${courseId}`);
+  return { ok: true };
+}
+
 export async function deleteInstructor(id: string, courseId: string): Promise<ActionResult> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: 'Not signed in' };
@@ -112,6 +134,50 @@ export async function addOfficeHours(input: unknown): Promise<ActionResult> {
   return { ok: true };
 }
 
+/** Replaces a grouped office-hours block; the weekday set may have changed. */
+export async function updateOfficeHours(
+  ids: string[],
+  input: unknown,
+): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: 'Not signed in' };
+
+  const parsed = officeHoursSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid input' };
+  }
+
+  const h = parsed.data;
+  if (h.endsAt <= h.startsAt) {
+    return { ok: false, error: 'The end time must be after the start time' };
+  }
+
+  const supabase = await createServerSupabase();
+
+  const { error: insertError } = await supabase.from('office_hours').insert(
+    h.weekdays.map((weekday) => ({
+      user_id: user.id,
+      instructor_id: h.instructorId,
+      weekday,
+      starts_at: h.startsAt,
+      ends_at: h.endsAt,
+      location: h.location,
+      url: h.url,
+      by_appointment: h.byAppointment,
+      notes: h.notes,
+    })),
+  );
+
+  if (insertError) return { ok: false, error: insertError.message };
+
+  if (ids.length > 0) {
+    await supabase.from('office_hours').delete().in('id', ids);
+  }
+
+  revalidatePath(`/courses/${h.courseId}`);
+  return { ok: true };
+}
+
 export async function deleteOfficeHours(id: string, courseId: string): Promise<ActionResult> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: 'Not signed in' };
@@ -150,6 +216,25 @@ export async function addCourseLink(input: unknown): Promise<ActionResult> {
   const { error } = await supabase
     .from('course_links')
     .insert({ user_id: user.id, course_id: courseId, ...rest });
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/courses/${courseId}`);
+  return { ok: true };
+}
+
+export async function updateCourseLink(id: string, input: unknown): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: 'Not signed in' };
+
+  const parsed = linkSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid input' };
+  }
+
+  const { courseId, ...rest } = parsed.data;
+  const supabase = await createServerSupabase();
+  const { error } = await supabase.from('course_links').update(rest).eq('id', id);
 
   if (error) return { ok: false, error: error.message };
 
@@ -212,6 +297,30 @@ export async function addDocument(input: unknown): Promise<ActionResult> {
     byte_size: byteSize,
     ...rest,
   });
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/courses/${courseId}`);
+  return { ok: true };
+}
+
+/** Renames or reclassifies a document. The stored file is untouched. */
+export async function updateDocument(
+  id: string,
+  courseId: string,
+  input: { title: string; kind: string },
+): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: 'Not signed in' };
+
+  const title = input.title.trim();
+  if (!title) return { ok: false, error: 'Title is required' };
+
+  const supabase = await createServerSupabase();
+  const { error } = await supabase
+    .from('documents')
+    .update({ title, kind: input.kind })
+    .eq('id', id);
 
   if (error) return { ok: false, error: error.message };
 

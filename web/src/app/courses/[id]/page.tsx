@@ -16,6 +16,7 @@ import {
   assignmentsToAgenda,
   eventsToAgenda,
   groupByDay,
+  dedupeClassEvents,
   type MeetingRow,
   type AssignmentRow,
   type EventRow,
@@ -138,7 +139,7 @@ export default async function CourseHubPage({
 
   const meetingsForAgenda = (course.course_meetings ?? []) as unknown as MeetingRow[];
 
-  const upcomingItems = [
+  const upcomingItemsRaw = [
     ...expandMeetings(
       meetingsForAgenda.map((m) => ({
         ...m,
@@ -155,6 +156,9 @@ export default async function CourseHubPage({
     ),
     ...eventsToAgenda((relatedEvents ?? []) as unknown as EventRow[]),
   ];
+
+  // Same duplicate class problem as the calendar view.
+  const upcomingItems = dedupeClassEvents(upcomingItemsRaw);
 
   const todayKey = zonedDateKey(now, timeZone);
   const upcoming = [...groupByDay(upcomingItems, timeZone).entries()].sort(

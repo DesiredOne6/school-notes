@@ -60,6 +60,58 @@ export async function createAssignment(input: unknown): Promise<ActionResult> {
  * Marks work done or reopens it. Setting the status is what clears or restores
  * the pending reminders, via the database trigger.
  */
+const updateSchema = assignmentSchema.extend({
+  status: z.enum(['todo', 'in_progress', 'submitted', 'graded', 'dropped']),
+  score: z.number().nullable(),
+});
+
+/** Edits every field of an assignment, including ones Canvas normally owns. */
+export async function updateAssignment(
+  assignmentId: string,
+  input: unknown,
+): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: 'Not signed in' };
+
+  const parsed = updateSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid input' };
+  }
+
+  const data = parsed.data;
+  const supabase = await createServerSupabase();
+
+  const { error } = await supabase
+    .from('assignments')
+    .update({
+      title: data.title,
+      course_id: data.courseId,
+      kind: data.kind,
+      status: data.status,
+      due_at: data.dueAt,
+      points: data.points,
+      score: data.score,
+      estimated_minutes: data.estimatedMinutes,
+      priority: data.priority,
+      description: data.notes,
+      completed_at:
+        data.status === 'submitted' || data.status === 'graded'
+          ? new Date().toISOString()
+          : null,
+      // A Canvas-imported row edited by hand must not be silently reverted on
+      // the next sync, so clear the fingerprint to force a fresh comparison.
+      source_hash: null,
+    })
+    .eq('id', assignmentId);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath('/');
+  revalidatePath('/calendar');
+  revalidatePath(`/assignments/${assignmentId}`);
+  return { ok: true };
+}
+
 export async function setAssignmentStatus(
   assignmentId: string,
   done: boolean,

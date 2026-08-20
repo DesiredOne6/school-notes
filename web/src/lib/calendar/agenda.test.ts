@@ -6,6 +6,7 @@ import {
   eventsToAgenda,
   groupByDay,
   weekRange,
+  dedupeClassEvents,
   type MeetingRow,
 } from '@/lib/calendar/agenda';
 
@@ -176,4 +177,92 @@ test('weekRange spans Sunday 00:00 to Saturday 23:59 locally', () => {
   const { start, end } = weekRange(new Date('2026-03-18T16:00:00Z'), TZ);
   assert.equal(start.toISOString(), '2026-03-15T04:00:00.000Z');
   assert.equal(end.toISOString(), '2026-03-22T03:59:59.000Z');
+});
+
+test('a Google copy of a class already on the timetable is hidden', () => {
+  // University calendars publish class times, so the same lecture arrives
+  // from both the course schedule and Google.
+  const classes = expandMeetings(
+    [meeting()],
+    new Date('2026-03-15T04:00:00Z'),
+    new Date('2026-03-22T03:59:59Z'),
+    TZ,
+  );
+
+  const googleCopy = eventsToAgenda([{
+    id: 'g1', title: 'EECS 281 Lecture',
+    starts_at: '2026-03-16T14:00:00Z', ends_at: '2026-03-16T15:30:00Z',
+    is_all_day: false, location: null, url: null,
+    external_calendars: { name: 'UMich', color: null, color_override: null },
+  }]);
+
+  const result = dedupeClassEvents([...classes, ...googleCopy]);
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].kind, 'class', 'the course meeting is kept, not the Google copy');
+});
+
+test('an unrelated event at the same time as class is kept', () => {
+  // Starting together is not enough on its own — the title must match or the
+  // slot must line up exactly, or real conflicts would vanish silently.
+  const classes = expandMeetings(
+    [meeting()],
+    new Date('2026-03-15T04:00:00Z'),
+    new Date('2026-03-22T03:59:59Z'),
+    TZ,
+  );
+
+  const clash = eventsToAgenda([{
+    id: 'g2', title: 'Dentist appointment',
+    starts_at: '2026-03-16T14:00:00Z', ends_at: '2026-03-16T14:45:00Z',
+    is_all_day: false, location: null, url: null, external_calendars: null,
+  }]);
+
+  const result = dedupeClassEvents([...classes, ...clash]);
+  assert.equal(result.length, 2, 'a genuine clash must stay visible');
+});
+
+test('an event in the same slot is treated as a duplicate even if titled differently', () => {
+  const classes = expandMeetings(
+    [meeting()],
+    new Date('2026-03-15T04:00:00Z'),
+    new Date('2026-03-22T03:59:59Z'),
+    TZ,
+  );
+
+  const sameSlot = eventsToAgenda([{
+    id: 'g3', title: 'Data Structures',
+    starts_at: '2026-03-16T14:00:00Z', ends_at: '2026-03-16T15:30:00Z',
+    is_all_day: false, location: null, url: null, external_calendars: null,
+  }]);
+
+  const result = dedupeClassEvents([...classes, ...sameSlot]);
+  assert.equal(result.length, 1);
+});
+
+test('an event a few minutes off still counts as the same class', () => {
+  const classes = expandMeetings(
+    [meeting()],
+    new Date('2026-03-15T04:00:00Z'),
+    new Date('2026-03-22T03:59:59Z'),
+    TZ,
+  );
+
+  const slightlyOff = eventsToAgenda([{
+    id: 'g4', title: 'EECS 281',
+    starts_at: '2026-03-16T14:05:00Z', ends_at: '2026-03-16T15:35:00Z',
+    is_all_day: false, location: null, url: null, external_calendars: null,
+  }]);
+
+  assert.equal(dedupeClassEvents([...classes, ...slightlyOff]).length, 1);
+});
+
+test('with no classes at all, every event survives', () => {
+  const events = eventsToAgenda([{
+    id: 'g5', title: 'Club meeting', starts_at: '2026-03-16T22:00:00Z',
+    ends_at: '2026-03-16T23:00:00Z', is_all_day: false, location: null, url: null,
+    external_calendars: null,
+  }]);
+
+  assert.deepEqual(dedupeClassEvents(events), events);
 });

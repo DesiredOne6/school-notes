@@ -154,7 +154,12 @@ export default async function Dashboard() {
 
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-medium">{item.title}</p>
+                    <Link
+                      href={`/assignments/${item.id}`}
+                      className="truncate text-sm font-medium hover:text-[var(--color-accent)]"
+                    >
+                      {item.title}
+                    </Link>
                     {KIND_STYLE[item.kind] && (
                       <span
                         className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${KIND_STYLE[item.kind]}`}
