@@ -24,10 +24,12 @@ export function CalendarPrefs({ hideDuplicates }: { hideDuplicates: boolean }) {
         className="mt-0.5 h-3.5 w-3.5 accent-[var(--color-accent)]"
       />
       <span>
-        Hide calendar events that duplicate my class times
+        Hide calendar events that duplicate something already shown
         <span className="mt-0.5 block text-[var(--color-muted)]">
-          Universities often publish class times to Google, which would otherwise show every
-          lecture twice. Only events at the same time as one of your classes are hidden.
+          Universities publish class times to Google, and a Canvas calendar subscribed there
+          repeats every assignment — both would otherwise appear twice. Only events that line
+          up in time <em>and</em> are identifiably the same thing are hidden; a genuine clash
+          stays visible, and your assignments are never hidden.
         </span>
       </span>
     </label>

@@ -176,41 +176,56 @@ export function eventsToAgenda(events: EventRow[]): AgendaItem[] {
   }));
 }
 
+/** Loose title comparison for duplicate detection. */
+function normalizeForMatch(text: string): string {
+  return text.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
 /**
- * Drops external calendar events that duplicate a class already on the
- * timetable.
+ * Drops external calendar events that duplicate something the app already
+ * shows.
  *
- * University calendars often publish class times to Google, so a class the user
- * has also entered as a course meeting appears twice. The course meeting is
- * kept because it carries the room, the meeting type, and the course colour;
- * the Google copy usually carries none of that.
+ * Two sources of doubling, both common:
  *
- * An event is treated as a duplicate when it starts within `toleranceMinutes`
- * of a class occurrence AND either:
- *   - its title mentions the course (the class item's title is the course code), or
- *   - its end time also lines up, meaning it occupies exactly the same slot.
+ * 1. A university publishes class times to Google, so a class the user also
+ *    entered as a course meeting appears twice.
+ * 2. The Canvas calendar feed is subscribed inside Google, so every assignment
+ *    arrives again as a calendar event.
  *
- * Both conditions are required so an unrelated event that merely starts at the
- * same time as a lecture is not silently hidden.
+ * In both cases the app's own record wins, because it carries what the copy
+ * does not: room and meeting type for a class, status and points for an
+ * assignment.
+ *
+ * The rules are deliberately conservative — an event must line up in time AND
+ * be identifiably the same thing. Overlapping in time alone is never enough,
+ * or a genuine clash (a dentist appointment during a lecture, an interview
+ * while an essay is due) would vanish silently.
+ *
+ * Assignments themselves are never removed. Only items of kind 'event' are
+ * ever candidates, so a deadline that falls during class always survives.
  */
 export function dedupeClassEvents(
   items: AgendaItem[],
   toleranceMinutes = 15,
 ): AgendaItem[] {
   const classes = items.filter((i) => i.kind === 'class');
-  if (classes.length === 0) return items;
+  const assignments = items.filter((i) => i.kind === 'assignment');
+  if (classes.length === 0 && assignments.length === 0) return items;
 
   const toleranceMs = toleranceMinutes * 60_000;
 
   return items.filter((item) => {
     if (item.kind !== 'event') return true;
 
-    return !classes.some((klass) => {
+    const eventTitle = normalizeForMatch(item.title);
+
+    // --- Duplicate of a class -----------------------------------------
+    const duplicatesClass = classes.some((klass) => {
       const startsTogether =
         Math.abs(item.startsAt.getTime() - klass.startsAt.getTime()) <= toleranceMs;
       if (!startsTogether) return false;
 
-      const mentionsCourse = item.title.toLowerCase().includes(klass.title.toLowerCase());
+      const mentionsCourse = eventTitle.includes(normalizeForMatch(klass.title));
 
       const endsTogether =
         item.endsAt !== null &&
@@ -219,6 +234,23 @@ export function dedupeClassEvents(
 
       return mentionsCourse || endsTogether;
     });
+
+    if (duplicatesClass) return false;
+
+    // --- Duplicate of an assignment -----------------------------------
+    // The Canvas feed titles events "Problem Set 4 [EECS 281]", so the event
+    // title contains the assignment title. A title match is required here:
+    // unlike a class, an assignment has no duration to corroborate it.
+    const duplicatesAssignment = assignments.some((assignment) => {
+      const dueTogether =
+        Math.abs(item.startsAt.getTime() - assignment.startsAt.getTime()) <= toleranceMs;
+      if (!dueTogether) return false;
+
+      const title = normalizeForMatch(assignment.title);
+      return title.length > 0 && eventTitle.includes(title);
+    });
+
+    return !duplicatesAssignment;
   });
 }
 

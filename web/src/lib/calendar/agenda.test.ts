@@ -266,3 +266,97 @@ test('with no classes at all, every event survives', () => {
 
   assert.deepEqual(dedupeClassEvents(events), events);
 });
+
+test('an assignment due during class is never hidden', () => {
+  // The dedupe only ever considers external calendar events. A deadline that
+  // falls inside a lecture must survive — that is exactly when you need it.
+  const classes = expandMeetings(
+    [meeting()],
+    new Date('2026-03-15T04:00:00Z'),
+    new Date('2026-03-22T03:59:59Z'),
+    TZ,
+  );
+
+  const dueDuringClass = assignmentsToAgenda([{
+    id: 'a1', title: 'Project 2', kind: 'project',
+    // 14:30Z is half an hour into the 14:00-15:30Z lecture.
+    due_at: '2026-03-16T14:30:00Z', due_is_all_day: false, url: null, courses: course,
+  }]);
+
+  const result = dedupeClassEvents([...classes, ...dueDuringClass]);
+
+  assert.equal(result.length, 2);
+  assert.ok(result.some((i) => i.kind === 'assignment'), 'the deadline must survive');
+});
+
+test('an assignment due at exactly the class start time still survives', () => {
+  const classes = expandMeetings(
+    [meeting()],
+    new Date('2026-03-15T04:00:00Z'),
+    new Date('2026-03-22T03:59:59Z'),
+    TZ,
+  );
+
+  // Same instant as the lecture start, and titled after the course, which is
+  // the worst case for a naive matcher.
+  const dueAtStart = assignmentsToAgenda([{
+    id: 'a2', title: 'EECS 281 Project 2', kind: 'project',
+    due_at: '2026-03-16T14:00:00Z', due_is_all_day: false, url: null, courses: course,
+  }]);
+
+  const result = dedupeClassEvents([...classes, ...dueAtStart]);
+  assert.equal(result.filter((i) => i.kind === 'assignment').length, 1);
+});
+
+test('a Canvas assignment mirrored into Google is hidden', () => {
+  // The Canvas feed subscribed inside Google returns every assignment as an
+  // event, so each deadline would otherwise appear twice.
+  const assignment = assignmentsToAgenda([{
+    id: 'a1', title: 'Problem Set 4', kind: 'assignment',
+    due_at: '2026-03-16T03:59:00Z', due_is_all_day: false, url: null, courses: course,
+  }]);
+
+  const canvasMirror = eventsToAgenda([{
+    id: 'g1', title: 'Problem Set 4 [EECS 281]',
+    starts_at: '2026-03-16T03:59:00Z', ends_at: '2026-03-16T03:59:00Z',
+    is_all_day: false, location: null, url: null,
+    external_calendars: { name: 'Canvas', color: null, color_override: null },
+  }]);
+
+  const result = dedupeClassEvents([...assignment, ...canvasMirror]);
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].kind, 'assignment', 'the app record wins over the mirror');
+});
+
+test('an unrelated event at the same moment as a deadline is kept', () => {
+  const assignment = assignmentsToAgenda([{
+    id: 'a1', title: 'Problem Set 4', kind: 'assignment',
+    due_at: '2026-03-16T03:59:00Z', due_is_all_day: false, url: null, courses: course,
+  }]);
+
+  const unrelated = eventsToAgenda([{
+    id: 'g2', title: 'Interview with recruiter',
+    starts_at: '2026-03-16T03:59:00Z', ends_at: '2026-03-16T04:59:00Z',
+    is_all_day: false, location: null, url: null, external_calendars: null,
+  }]);
+
+  const result = dedupeClassEvents([...assignment, ...unrelated]);
+  assert.equal(result.length, 2, 'a real conflict must stay visible');
+});
+
+test('a similarly titled event at a different time is kept', () => {
+  const assignment = assignmentsToAgenda([{
+    id: 'a1', title: 'Problem Set 4', kind: 'assignment',
+    due_at: '2026-03-16T03:59:00Z', due_is_all_day: false, url: null, courses: course,
+  }]);
+
+  // A study session for the same problem set, two days earlier.
+  const studySession = eventsToAgenda([{
+    id: 'g3', title: 'Problem Set 4 study group',
+    starts_at: '2026-03-14T20:00:00Z', ends_at: '2026-03-14T22:00:00Z',
+    is_all_day: false, location: null, url: null, external_calendars: null,
+  }]);
+
+  assert.equal(dedupeClassEvents([...assignment, ...studySession]).length, 2);
+});

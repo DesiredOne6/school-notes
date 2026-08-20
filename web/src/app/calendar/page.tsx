@@ -116,8 +116,8 @@ export default async function CalendarPage({
     ...eventsToAgenda((eventsRes.data ?? []) as unknown as EventRow[]),
   ];
 
-  // A university that publishes class times to Google would otherwise show
-  // every lecture twice — once from the course schedule, once from the feed.
+  // Two sources of doubling: a university publishing class times to Google,
+  // and a Canvas calendar subscribed there repeating every assignment.
   const items = hideDuplicates ? dedupeClassEvents(allItems) : allItems;
   const hiddenCount = allItems.length - items.length;
 
@@ -225,7 +225,7 @@ export default async function CalendarPage({
         {hiddenCount > 0 && (
           <>
             {' · '}
-            {hiddenCount} duplicate{hiddenCount === 1 ? '' : 's'} of your class times hidden (
+            {hiddenCount} duplicate{hiddenCount === 1 ? '' : 's'} hidden (
             <Link href="/settings" className="text-[var(--color-accent)] hover:underline">
               change
             </Link>
